@@ -1,13 +1,12 @@
-use std::usize;
-
 use bevy::{
     camera::visibility::RenderLayers,
     color::palettes::css::WHITE,
     prelude::*,
-    render::{extract_component::ExtractComponent, render_resource::ShaderType},
+    render::{RenderApp, extract_component::ExtractComponent, render_resource::ShaderType},
 };
 
 #[derive(Component, Default, Clone, ExtractComponent, Reflect)]
+#[extract_app(RenderApp)]
 pub(crate) struct ExtractedWorldData {
     pub camera_pos: Vec2,
 }
@@ -17,6 +16,7 @@ pub(crate) struct ExtractedWorldData {
 /// # Panics
 /// Panics if added to multiple cameras at once.
 #[derive(Debug, Component, ExtractComponent, Clone, Reflect)]
+#[extract_app(RenderApp)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[require(Transform, RenderLayers)]
 pub struct FireflyConfig {
@@ -203,7 +203,11 @@ pub struct UniformFireflyConfig {
 ///
 /// ## Example
 /// ```
+/// # use bevy::{prelude::*, camera::CameraOutputMode};
+/// # use bevy_firefly::prelude::*;
+/// # fn setup(mut commands: Commands) {
 /// let main_camera = commands.spawn((
+///     Camera2d,
 ///     FireflyConfig {
 ///         combination_mode: CombinationMode::Add,
 ///         ..default()
@@ -215,25 +219,28 @@ pub struct UniformFireflyConfig {
 /// )).id();
 ///
 /// commands.spawn((
+///     Camera2d,
 ///     FireflyConfig::default(),
 ///     Camera {
 ///         order: -1,
 ///         output_mode: CameraOutputMode::Skip,
 ///         ..default()
-///     }
+///     },
 ///     CombineLightmapTo(main_camera)
 /// ));
 ///
 /// commands.spawn((
+///     Camera2d,
 ///     FireflyConfig::default(),
 ///     Camera {
 ///         order: -1,
 ///         output_mode: CameraOutputMode::Skip,
 ///         ..default()
-///     }
+///     },
 ///     CombineLightmapTo(main_camera)
 /// ));
 ///
+/// # }
 /// ```
 ///
 /// ## Limitations

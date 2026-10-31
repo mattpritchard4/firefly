@@ -1,23 +1,18 @@
-enable f16;
-
-#import bevy_core_pipeline::fullscreen_vertex_shader::FullscreenVertexOutput
-#import bevy_render::view::View
-
-#ifdef TONEMAP_IN_SHADER
-#import bevy_core_pipeline::tonemapping
-#endif
-
-#import firefly::types::{
-    view, PointLight, LightingData, PolyOccluder, RoundOccluder, OccluderPointer, 
+import bevy_core_pipeline::fullscreen_vertex_shader::FullscreenVertexOutput;
+import bevy_render::view::View;
+@if(TONEMAP_IN_SHADER)
+import bevy_core_pipeline::tonemapping;
+import super::types::{
+    view, PointLight, LightingData, PolyOccluder, RoundOccluder, OccluderPointer,
     FireflyConfig, BinIndices, N_BINS,
-}
-
-#import firefly::utils::{
-    ndc_to_world, frag_coord_to_ndc, orientation, same_orientation, intersect, blend, 
+};
+import super::utils::{
+    ndc_to_world, frag_coord_to_ndc, orientation, same_orientation, intersect, blend,
     shadow_blend, intersects_arc, rotate, rotate_arctan, between_arctan, distance_point_to_line,
     intersection_point, rect_intersection, rect_line_intersection, intersects_axis_edge, intersects_corner_arc,
     rotate_90, rotate_90_cc, intersects_half, falloff
-}
+};
+enable f16;
 
 @group(1) @binding(0)
 var texture_sampler: sampler;
@@ -26,7 +21,7 @@ var texture_sampler: sampler;
 var<storage> lights: array<PointLight>;
 
 @group(1) @binding(2)
-var<storage> light_index: u32; 
+var<storage> light_index: u32;
 
 @group(1) @binding(3)
 var<storage> round_occluders: array<RoundOccluder>;
@@ -54,7 +49,7 @@ var<uniform> config: FireflyConfig;
 
 const PI2: f32 = 6.28318530717958647692528676655900577;
 const PI: f32 = 3.14159265358979323846264338327950288;
-const PIDIV2: f32 = 1.57079632679489661923132169163975144; 
+const PIDIV2: f32 = 1.57079632679489661923132169163975144;
 
 @fragment
 fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4f {
@@ -62,30 +57,29 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4f {
     let light = lights[light_index];
 
     var res = vec4f(0);
-    
+
     let pos = ndc_to_world(frag_coord_to_ndc(in.position.xy * config.texture_scale));
     let normal = textureLoad(normal_map, vec2<i32>(in.uv * vec2<f32>(textureDimensions(normal_map))), 0);
     let stencil = textureSample(sprite_stencil, texture_sampler, in.uv);
 
     let dist = distance(pos, light.pos);
-    
+
     let a = pos - light.pos;
     let b = light.dir;
-    let dot_a_b = clamp(dot(normalize(a), normalize(b)), -1.0, 1.0); 
+    let dot_a_b = clamp(dot(normalize(a), normalize(b)), -1.0, 1.0);
 
     let angle = acos(dot_a_b);
 
     var light_color = light.color;
 
-#ifdef TONEMAP_IN_SHADER
+@if(TONEMAP_IN_SHADER)
     light_color = tonemapping::tone_mapping(light_color, view.color_grading);
-#endif
 
     // light_color = pow(light_color, vec4<f32>(2.2));
 
     if (dist < light.radius && angle <= light.outer_angle / 2.) {
-        
-        var angle_multi = 1.0; 
+
+        var angle_multi = 1.0;
 
         if angle > light.inner_angle / 2. {
             // return vec4<f32>(1.0, 0.0, 0.0, 1.0);
@@ -93,7 +87,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4f {
         }
 
         var normal_multi = 1.0;
-    
+
         if config.normal_mode != 0 && normal.a > 0 && normal.b != 0.1 {
             let normal_dir = mix(normalize(normal.xyz * 2f - 1f), vec3f(0f), config.normal_attenuation);
 
@@ -115,7 +109,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4f {
                 let light_dir = normalize(vec3f(light.pos.x - pos.x, light.height - stencil.b, light.z - stencil.g));
                 normal_multi = max(0f, dot(normal_dir, light_dir));
             }
-        }; 
+        };
 
         if normal.b == f32(f16(0.1)) {
             normal_multi = 1.0;
@@ -137,19 +131,19 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4f {
         var start_vertex = 0u;
         var sequence_index = 0u;
 
-        var shadow = vec3f(1); 
+        var shadow = vec3f(1);
 
         var bin = u32(floor(((atan2(pos.y - light.pos.y, pos.x - light.pos.x) + PI) / PI2) * f32(N_BINS)));
         bin = clamp(bin, 0, N_BINS-1);
 
-        let left = bin_indices.indices[bin]; 
+        let left = bin_indices.indices[bin];
         let right = bin_indices.indices[bin + 1];
 
         // if left >= right {
             // return vec4f(1.0, 0.0, 0.0, 1.0);
         // }
 
-        var prev_index = 0u; 
+        var prev_index = 0u;
         var accumulated_occlusion = 0.0;
 
         // if left >= right {
@@ -158,9 +152,9 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4f {
 
         for (var pointer_index = left; pointer_index < right; pointer_index += 1) {
             let pointer = occluders[pointer_index];
-            
+
             if pointer.distance > dist { break; }
-            
+
             // return vec4<f32>(1.0, 0.0, 0.0, 1.0);
             let occluder_type = pointer.index & 2147483648u;
             let occluder_index = pointer.index & 2147483647u;
@@ -173,12 +167,12 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4f {
                     }
                 }
 
-                let result = round_check(pos, occluder_index); 
+                let result = round_check(pos, occluder_index);
 
 
                 if result > 0.0 {
                     shadow = shadow_blend(shadow, round_occluders[occluder_index].color.rgb, round_occluders[occluder_index].opacity * result);
-                }            
+                }
             }
             // poly occluder
             else {
@@ -204,7 +198,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4f {
                 let split = pointer.split;
                 let length = pointer.length & 1073741823u;
 
-                let result = poly_check(pos, occluder_index, term, rev, min_v, split, length); 
+                let result = poly_check(pos, occluder_index, term, rev, min_v, split, length);
                 accumulated_occlusion = max(accumulated_occlusion, result);
             }
 
@@ -212,7 +206,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4f {
                 break;
             }
         }
-            
+
         if prev_index != 0u && accumulated_occlusion > 0.0 {
             shadow = shadow_blend(shadow, poly_occluders[prev_index].color.rgb, poly_occluders[prev_index].opacity * accumulated_occlusion);
         }
@@ -230,10 +224,10 @@ fn poly_check(pos: vec2f, index: u32, term: u32, rev: u32, min_v: u32, split: u3
 
     let angle = atan2(pos.y - light.pos.y, pos.x - light.pos.x);
 
-    var maybe_prev = 0; 
+    var maybe_prev = 0;
 
-    var start = min_v; 
-    var len = length; 
+    var start = min_v;
+    var len = length;
 
     if rev == 0 {
 
@@ -282,13 +276,13 @@ fn poly_check(pos: vec2f, index: u32, term: u32, rev: u32, min_v: u32, split: u3
         if rev == 0 {
             let loops = min_v + length - 1 >= occluder.start_vertex + occluder.n_vertices;
             let last = min_v + length - 1 - select(0, occluder.n_vertices, loops);
-    
+
             return get_softness_multi(light.core_radius, light.pos, pos, vertices[min_v], vertices[last]);
         }
         else {
             let loops = i32(min_v) - i32(length) + 1 < i32(occluder.start_vertex);
             let last = u32(i32(min_v) - i32(length) + 1 + select(0, i32(occluder.n_vertices), loops));
-            
+
             return get_softness_multi(light.core_radius, light.pos, pos, vertices[min_v], vertices[last]);
         }
     }
@@ -306,9 +300,9 @@ fn get_softness_multi(light_range: f32, light_pos: vec2<f32>, pos: vec2<f32>, ex
     // }
 
     // let left_range = light_range;
-    
-    let left_range = min(light_range, distance(extreme_left, light_pos)); 
- 
+
+    let left_range = min(light_range, distance(extreme_left, light_pos));
+
     var left_t1 = light_pos + rotate_90(normalize(extreme_left - light_pos)) * left_range;
     var left_t2 = light_pos;
 
@@ -326,7 +320,7 @@ fn get_softness_multi(light_range: f32, light_pos: vec2<f32>, pos: vec2<f32>, ex
     let under_right = orientation(right_t2, extreme_right, pos) > 0.01;
     let above_right = orientation(right_t1, extreme_right, pos) < -0.99;
 
-    let inside_right = !above_right && !under_right;    
+    let inside_right = !above_right && !under_right;
 
     var left = 0.0;
     var right = 0.0;
@@ -341,7 +335,7 @@ fn get_softness_multi(light_range: f32, light_pos: vec2<f32>, pos: vec2<f32>, ex
 
         left = 1.0 - acos(d1) / acos(d2);
     }
-    
+
     if inside_right {
         let right1 = normalize(extreme_right - right_t1);
         var d1 = dot(normalize(pos - extreme_right), right1);
@@ -359,12 +353,12 @@ fn get_softness_multi(light_range: f32, light_pos: vec2<f32>, pos: vec2<f32>, ex
 fn angle_term(p: vec2f, i: u32, length: u32, term: u32) -> f32 {
     let light = lights[light_index];
     var angle = atan2(p.y - light.pos.y, p.x - light.pos.x);
-    
+
     if i == length - 1 && term == 1 {
         angle += PI2;
     }
     else if i == 0 && term == 2 {
-        angle -= PI2; 
+        angle -= PI2;
     }
 
     return angle;
@@ -382,15 +376,15 @@ fn vertex_reverse(start: u32, index: i32, start_vertex: u32, n_vertices: u32) ->
         return vertices[u32(i32(start) - i32(index) + i32(n_vertices))];
     }
     return vertices[u32(i32(start) - i32(index))];
-} 
+}
 
 fn bs_vertex_forward(angle: f32, start: u32, length: u32, term: u32, start_vertex: u32, n_vertices: u32) -> i32 {
     let light = lights[light_index];
 
     var ans = -1;
-    
-    var low = 0i; 
-    var high = i32(length) - 1; 
+
+    var low = 0i;
+    var high = i32(length) - 1;
 
     if angle < angle_term(vertex_forward(start, u32(low), start_vertex, n_vertices), u32(low), length, term) {
         return -1;
@@ -420,8 +414,8 @@ fn bs_vertex_reverse(angle: f32, start: u32, length: u32, term: u32, start_verte
     let light = lights[light_index];
 
     var ans = -1;
-    
-    var low = 0i; 
+
+    var low = 0i;
     var high = i32(length) - 1;
 
     if angle <= angle_term(vertex_reverse(start, low, start_vertex, n_vertices), u32(low), length, term) {
@@ -457,20 +451,20 @@ fn round_check(pos: vec2f, occluder: u32) -> f32 {
     let half_h = occ.half_height;
     let radius = occ.radius;
 
-    let relative_pos = pos - occ.pos; 
-    let relative_light = light.pos - occ.pos; 
+    let relative_pos = pos - occ.pos;
+    let relative_light = light.pos - occ.pos;
 
     let c = cos(occ.rot);
     let s = sin(occ.rot);
 
-    // let c = 1.0; 
+    // let c = 1.0;
     // let s = 0.0;
 
     let p_local = vec2f(relative_pos.x * c + relative_pos.y * s, -relative_pos.x * s + relative_pos.y * c);
     let l_local = vec2f(relative_light.x * c + relative_light.y * s, -relative_light.x * s + relative_light.y * c);
-    
-    var half_intersection = false; 
-    
+
+    var half_intersection = false;
+
     let rect = vec4f(-(half_w + radius), -(half_h + radius), half_w + radius, half_h + radius);
 
     if !rect_line_intersection(p_local, l_local, rect) {
@@ -488,7 +482,7 @@ fn round_check(pos: vec2f, occluder: u32) -> f32 {
         if top_edge.full_intersection {
             return 1.0;
         }
-        
+
         half_intersection |= top_edge.half_intersection;
 
         let bottom_edge = intersects_axis_edge(p_local, l_local, -(half_h + radius), -half_w, half_w, false);
@@ -519,26 +513,26 @@ fn round_check(pos: vec2f, occluder: u32) -> f32 {
     }
 
     if (radius > 0) {
-        let arc1 = intersects_corner_arc(p_local, l_local, vec2f(half_w, half_h), radius, vec2f(1,1)); 
-        if arc1.full_intersection { 
+        let arc1 = intersects_corner_arc(p_local, l_local, vec2f(half_w, half_h), radius, vec2f(1,1));
+        if arc1.full_intersection {
             return 1.0;
         }
         half_intersection |= arc1.half_intersection;
 
-        let arc2 = intersects_corner_arc(p_local, l_local, vec2f(-half_w, half_h), radius, vec2f(-1,1)); 
-        if arc2.full_intersection { 
+        let arc2 = intersects_corner_arc(p_local, l_local, vec2f(-half_w, half_h), radius, vec2f(-1,1));
+        if arc2.full_intersection {
             return 1.0;
         }
         half_intersection |= arc2.half_intersection;
 
-        let arc3 = intersects_corner_arc(p_local, l_local, vec2f(half_w, -half_h), radius, vec2f(1,-1)); 
-        if arc3.full_intersection { 
+        let arc3 = intersects_corner_arc(p_local, l_local, vec2f(half_w, -half_h), radius, vec2f(1,-1));
+        if arc3.full_intersection {
             return 1.0;
         }
         half_intersection |= arc3.half_intersection;
 
-        let arc4 = intersects_corner_arc(p_local, l_local, vec2f(-half_w, -half_h), radius, vec2f(-1,-1)); 
-        if arc4.full_intersection { 
+        let arc4 = intersects_corner_arc(p_local, l_local, vec2f(-half_w, -half_h), radius, vec2f(-1,-1));
+        if arc4.full_intersection {
             return 1.0;
         }
         half_intersection |= arc4.half_intersection;
@@ -614,11 +608,11 @@ fn update_left_right(light_pos: vec2<f32>, left_right: vec4<f32>, p: vec2<f32>) 
     }
 
     if orientation(light_pos, left_right.zw, p) > 0 {
-        res.z = p.x; 
-        res.w = p.y; 
+        res.z = p.x;
+        res.w = p.y;
     }
 
-    return res; 
+    return res;
 }
 
 fn get_arc_extremes(l_local: vec2f, c: vec2f, r: f32, start_angle: f32, end_angle: f32) -> ArcTangents {
@@ -626,14 +620,14 @@ fn get_arc_extremes(l_local: vec2f, c: vec2f, r: f32, start_angle: f32, end_angl
 
     let diff = l_local - c;
     let dist_sq = dot(diff, diff);
-    
+
     // Pixel is inside the corner radius
-    // if (dist_sq <= r * r) { return 10.0; } 
+    // if (dist_sq <= r * r) { return 10.0; }
 
     let dist = sqrt(dist_sq);
     let th = acos(r / dist);
     let d = atan2(diff.y, diff.x);
-    
+
     let d1 = d + th;
     let d2 = d - th;
 
@@ -646,12 +640,12 @@ fn get_arc_extremes(l_local: vec2f, c: vec2f, r: f32, start_angle: f32, end_angl
     let a2 = atan2(t2.y - c.y, t2.x - c.x);
 
     if (between_arctan(a1, start_angle, end_angle)) {
-        res.is_a = true; 
-        res.a = t1; 
+        res.is_a = true;
+        res.a = t1;
     }
 
     if (between_arctan(a2, start_angle, end_angle)) {
-        res.is_b = true; 
+        res.is_b = true;
         res.b = t2;
     }
 
@@ -659,8 +653,8 @@ fn get_arc_extremes(l_local: vec2f, c: vec2f, r: f32, start_angle: f32, end_angl
 }
 
 struct ArcTangents {
-    is_a: bool, 
-    a: vec2<f32>, 
+    is_a: bool,
+    a: vec2<f32>,
     is_b: bool,
     b: vec2<f32>
 }

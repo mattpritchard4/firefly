@@ -1,7 +1,7 @@
-// Shader that receives the lightmap and applies noise over it. 
-// The actual noise function is taken from: https://www.shadertoy.com/view/tldSRj. 
+// Shader that receives the lightmap and applies noise over it.
+// The actual noise function is taken from: https://www.shadertoy.com/view/tldSRj.
 
-#import bevy_core_pipeline::fullscreen_vertex_shader::FullscreenVertexOutput
+import bevy_core_pipeline::fullscreen_vertex_shader::FullscreenVertexOutput;
 
 @group(0) @binding(0)
 var lightmap: texture_2d<f32>;
@@ -13,8 +13,8 @@ var texture_sampler: sampler;
 var<uniform> settings: NoiseSettings;
 
 struct NoiseSettings {
-    time: f32, 
-    kf: f32, 
+    time: f32,
+    kf: f32,
 }
 
 @fragment
@@ -30,7 +30,7 @@ fn fragment(vo: FullscreenVertexOutput) -> @location(0) vec4<f32> {
 
 fn noise(p: vec2<f32>) -> f32 {
     let kf = settings.kf;
-    
+
     let i = floor(p);
 	var f = fract(p);
     f = f*f*(3.0-2.0*f);
@@ -39,6 +39,6 @@ fn noise(p: vec2<f32>) -> f32 {
                mix(sin(kf*dot(p,g(i+vec2<f32>(0,1)))),
                	   sin(kf*dot(p,g(i+vec2<f32>(1,1)))),f.x),f.y);
 }
-fn g(n: vec2<f32>) -> vec2<f32> { 
-    return sin(n.x*n.y*vec2<f32>(12,17)+vec2<f32>(1,2)); 
+fn g(n: vec2<f32>) -> vec2<f32> {
+    return sin(n.x*n.y*vec2<f32>(12,17)+vec2<f32>(1,2));
 }

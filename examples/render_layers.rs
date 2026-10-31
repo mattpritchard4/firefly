@@ -1,3 +1,5 @@
+mod support;
+
 use bevy::{
     camera::{Hdr, RenderTarget, visibility::RenderLayers},
     color::palettes::css::{BLUE, RED},
@@ -14,6 +16,7 @@ fn main() {
 
     app.add_systems(Startup, setup);
 
+    support::install(&mut app);
     app.run();
 }
 
@@ -37,7 +40,7 @@ fn setup(mut commands: Commands) {
 
     commands.spawn((
         Camera2d,
-        Hdr::default(),
+        Hdr,
         Projection::Orthographic(proj.clone()),
         FireflyConfig::default(),
         RenderTarget::Window(WindowRef::Primary),
@@ -46,7 +49,7 @@ fn setup(mut commands: Commands) {
 
     commands.spawn((
         Camera2d,
-        Hdr::default(),
+        Hdr,
         Projection::Orthographic(proj.clone()),
         FireflyConfig::default(),
         RenderTarget::Window(WindowRef::Entity(window2)),
@@ -55,7 +58,7 @@ fn setup(mut commands: Commands) {
 
     commands.spawn((
         Camera2d,
-        Hdr::default(),
+        Hdr,
         Projection::Orthographic(proj.clone()),
         FireflyConfig::default(),
         RenderTarget::Window(WindowRef::Entity(window3)),

@@ -1,3 +1,5 @@
+mod support;
+
 use bevy::{
     camera::Hdr, color::palettes::css::RED, input::mouse::MouseWheel, prelude::*,
     window::PrimaryWindow,
@@ -29,6 +31,7 @@ fn main() {
     app.add_systems(Startup, setup);
     app.add_systems(Update, (move_light, move_camera));
 
+    support::install(&mut app);
     app.run();
 }
 
@@ -127,7 +130,7 @@ fn setup(mut commands: Commands) {
 
     commands.spawn((
         Occluder2d::polygon(
-            vec![
+            [
                 vec2(-428., 135.),
                 vec2(-482., 158.),
                 vec2(-475., 231.),
@@ -242,7 +245,7 @@ fn move_light(
 
     let Some(cursor_position) = window
         .cursor_position()
-        .and_then(|cursor| camera.0.viewport_to_world_2d(&camera.1, cursor).ok())
+        .and_then(|cursor| camera.0.viewport_to_world_2d(camera.1, cursor).ok())
     else {
         return;
     };

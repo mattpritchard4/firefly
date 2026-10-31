@@ -1,6 +1,9 @@
 use bevy::{platform::collections::HashSet, prelude::*, sprite::Anchor};
 
-use crate::sprites::ExtractedSlice;
+use crate::{
+    sprites::ExtractedSlice,
+    texture_slice::{TextureSlice, TextureSlicerExt},
+};
 
 // use crate::sprites::stencil::ExtractedSlice;
 /// Component storing texture slices for tiled or sliced sprite entities
@@ -15,7 +18,6 @@ impl ComputedTextureSlices {
     /// # Arguments
     ///
     /// * `sprite` - The sprite component
-    #[must_use]
     pub(crate) fn extract_slices<'a>(
         &'a self,
         sprite: &'a Sprite,

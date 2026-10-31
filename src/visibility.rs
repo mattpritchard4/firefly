@@ -7,8 +7,8 @@ use std::any::TypeId;
 
 use bevy::{
     camera::visibility::{SetViewVisibility, VisibilitySystems, VisibleEntities},
-    math::bounding::{Aabb2d, BoundingVolume, IntersectsVolume},
     prelude::*,
+    shape::{Aabb2d, BoundingVolume, IntersectsVolume},
 };
 
 use crate::{
@@ -57,6 +57,9 @@ impl Plugin for VisibilityPlugin {
             PostUpdate,
             (mark_visible_lights, mark_visible_occluders)
                 .chain()
+                // Append custom light visibility after Bevy clears/populates its camera lists.
+                .after(bevy::camera::visibility::check_visibility_cpu_culling)
+                .after(bevy::camera::visibility::check_visibility_gpu_culling)
                 .in_set(VisibilitySystems::CheckVisibility),
         );
     }

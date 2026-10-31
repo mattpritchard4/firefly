@@ -1,17 +1,12 @@
-enable f16;
-
-#ifdef TONEMAP_IN_SHADER
-#import bevy_core_pipeline::tonemapping
-#endif
-
-#import bevy_render::{
+@if(TONEMAP_IN_SHADER)
+import bevy_core_pipeline::tonemapping;
+import bevy_render::{
     maths::affine3_to_square,
     view::View,
-}
-
-#import firefly::types::SpriteId
-
-#import bevy_sprite::sprite_view_bindings::view
+};
+import super::types::SpriteId;
+import super::types::view;
+enable f16;
 
 struct VertexInput {
     @builtin(vertex_index) index: u32,
@@ -64,7 +59,7 @@ fn vertex(in: VertexInput) -> VertexOutput {
 @group(1) @binding(3) var<uniform> normal_dummy: u32;
 
 struct FragmentOutput {
-    @location(0) stencil: vec4<f32>, 
+    @location(0) stencil: vec4<f32>,
     @location(1) normal: vec4<f32>,
 }
 
@@ -74,7 +69,7 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
 
     var color = textureSample(sprite_texture, sprite_sampler, in.uv);
     var normal = textureSample(normal_texture, sprite_sampler, in.uv);
-    
+
     if color.a >= 1.0 {
         res.stencil = vec4<f32>(in.y, in.z, in.height, 1.0);
     }
@@ -94,5 +89,5 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
         res.normal = vec4<f32>(0.0);
     }
 
-    return res; 
+    return res;
 }

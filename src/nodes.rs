@@ -1,14 +1,13 @@
 //! Module containg `Render Graph Nodes` used by Firefly.  
 
 use bevy::{
-    ecs::{query::QueryItem, system::lifetimeless::Read},
+    ecs::system::lifetimeless::Read,
     prelude::*,
     render::{
         render_phase::{ViewBinnedRenderPhases, ViewSortedRenderPhases},
         render_resource::{
             BindGroupEntries, PipelineCache, RenderPassColorAttachment, RenderPassDescriptor,
-            TextureAspect, TextureFormat, TextureUsages, TextureViewDescriptor,
-            TextureViewDimension,
+            TextureAspect, TextureUsages, TextureViewDescriptor, TextureViewDimension,
         },
         renderer::{RenderContext, ViewQuery},
         view::{ExtractedView, ViewTarget},
@@ -42,14 +41,17 @@ pub fn create_lightmap(
     };
 
     let view = if let Some(combine_lightmap_to) = combine_lightmap_to {
-        let lightmap = world
-            .get::<CombinedLightMapTextures>(combine_lightmap_to.0)
-            .unwrap();
-
-        let format = world
-            .get::<ExtractedView>(combine_lightmap_to.0)
-            .unwrap()
-            .target_format;
+        let (Some(lightmap), Some(destination)) = (
+            world.get::<CombinedLightMapTextures>(combine_lightmap_to.0),
+            world.get::<ExtractedView>(combine_lightmap_to.0),
+        ) else {
+            // A destination can be disabled or retired while its source camera survives.
+            return;
+        };
+        if combine_lightmap_to.1 >= lightmap.0.texture.depth_or_array_layers() {
+            return;
+        }
+        let format = destination.target_format;
 
         &lightmap.0.texture.create_view(&TextureViewDescriptor {
             label: "layer of combined lightmap texture array".into(),
@@ -142,22 +144,23 @@ pub fn apply_lightmap(
             )),
         )
     } else {
-        let combined_view =
-            combined_textures
-                .unwrap()
-                .0
-                .texture
-                .create_view(&TextureViewDescriptor {
-                    label: "combined lightmap texture array".into(),
-                    format: Some(format),
-                    dimension: Some(TextureViewDimension::D2Array),
-                    usage: Some(TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING),
-                    aspect: TextureAspect::All,
-                    base_mip_level: 0,
-                    mip_level_count: Some(1),
-                    base_array_layer: 0,
-                    array_layer_count: None,
-                });
+        let Some(combined_textures) = combined_textures else {
+            return;
+        };
+        let combined_view = combined_textures
+            .0
+            .texture
+            .create_view(&TextureViewDescriptor {
+                label: "combined lightmap texture array".into(),
+                format: Some(format),
+                dimension: Some(TextureViewDimension::D2Array),
+                usage: Some(TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING),
+                aspect: TextureAspect::All,
+                base_mip_level: 0,
+                mip_level_count: Some(1),
+                base_array_layer: 0,
+                array_layer_count: None,
+            });
 
         render_context.render_device().create_bind_group(
             "apply lightmap bind group combined",

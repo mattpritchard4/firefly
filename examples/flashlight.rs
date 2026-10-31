@@ -131,7 +131,7 @@ fn transform(angle: f32, radius: f32) -> Transform {
 }
 
 fn f(unit_size: f32) -> Vec<Vec2> {
-    vec![
+    [
         vec2(-1.0, 0.0),
         vec2(-1.0, 5.0),
         vec2(1.0, 5.0),
@@ -149,7 +149,7 @@ fn f(unit_size: f32) -> Vec<Vec2> {
 }
 
 fn i(unit_size: f32) -> Vec<Vec2> {
-    vec![
+    [
         vec2(-0.5, 0.0),
         vec2(-0.5, 3.0),
         vec2(0.5, 3.0),
@@ -161,7 +161,7 @@ fn i(unit_size: f32) -> Vec<Vec2> {
 }
 
 fn r(unit_size: f32) -> Vec<Vec2> {
-    vec![
+    [
         vec2(-1.5, 0.0),
         vec2(-1.5, 5.0),
         vec2(0.5, 5.0),
@@ -179,7 +179,7 @@ fn r(unit_size: f32) -> Vec<Vec2> {
 }
 
 fn e(unit_size: f32) -> Vec<Vec2> {
-    vec![
+    [
         vec2(-1.0, 0.0),
         vec2(-1.0, 5.0),
         vec2(1.0, 5.0),
@@ -199,7 +199,7 @@ fn e(unit_size: f32) -> Vec<Vec2> {
 }
 
 fn l(unit_size: f32) -> Vec<Vec2> {
-    vec![
+    [
         vec2(-1.0, 0.0),
         vec2(-1.0, 5.0),
         vec2(0.0, 5.0),
@@ -213,7 +213,7 @@ fn l(unit_size: f32) -> Vec<Vec2> {
 }
 
 fn y(unit_size: f32) -> Vec<Vec2> {
-    vec![
+    [
         vec2(-0.5, 0.0),
         vec2(-0.5, 2.0),
         vec2(-1.5, 5.0),
@@ -244,7 +244,7 @@ fn move_light(
 
     let Some(mouse_pos) = window
         .cursor_position()
-        .and_then(|cursor| camera.0.viewport_to_world_2d(&camera.1, cursor).ok())
+        .and_then(|cursor| camera.0.viewport_to_world_2d(camera.1, cursor).ok())
     else {
         return;
     };

@@ -76,7 +76,7 @@ fn spawn_observers(mut commands: Commands) {
 
 // handles buffer when the light gets despawned or the component is removed
 fn on_light_removed(
-    trigger: On<Remove, ExtractedPointLight>,
+    trigger: On<Remove<ExtractedPointLight>>,
     mut lights: Query<&mut LightIndex>,
     mut light_manager: ResMut<BufferManager<UniformPointLight>>,
 ) {
@@ -90,7 +90,7 @@ fn on_light_removed(
 
 // handles buffer when the occluder gets despawned or the component is removed
 fn on_occluder_removed(
-    trigger: On<Remove, ExtractedOccluder>,
+    trigger: On<Remove<ExtractedOccluder>>,
     mut occluders: Query<
         (
             &ExtractedOccluder,
@@ -546,8 +546,7 @@ impl BinBuffer {
             // info!("{:?}", &bin.clone().into_sorted_vec());
             // values.extend_from_slice(&bin.clone().into_sorted_vec());
 
-            loop {
-                let Some(x) = bin.pop() else { break };
+            while let Some(x) = bin.pop() {
                 values.push(x);
             }
         }
@@ -603,8 +602,8 @@ impl BinBuffer {
 
     fn add_to_bins(&mut self, min_bin: usize, max_bin: usize, pointer: OccluderPointer) {
         // info!("writing buffers {min_bin} to {max_bin}");
-        for index in min_bin..(max_bin + 1) {
-            self.occluders[index].push(pointer);
+        for bin in &mut self.occluders[min_bin..=max_bin] {
+            bin.push(pointer);
         }
     }
 }
@@ -628,11 +627,11 @@ pub struct OccluderPointer {
     /// There is also additional information encoded at the left of this value:
     ///
     /// - A `term` variable that takes 2 bits, describing the terminator format of this chain. This is 1
-    /// if the chain ends looping over the atan2 seam, 2 if it starts like that, and 0 otherwise.
+    ///   if the chain ends looping over the atan2 seam, 2 if it starts like that, and 0 otherwise.
     ///
     /// - A `rev` variable that takes 1 bit and specifies if the chain is made of vertices in the same order as they're
-    /// stored in (clockwise) or not. This is used for when a light is inside the perimeter of an occluder and the
-    /// edges need to be reversed.
+    ///   stored in (clockwise) or not. This is used for when a light is inside the perimeter of an occluder and the
+    ///   edges need to be reversed.
     pub min_v: u32,
     /// In case this edge loops over the atan2 seam, this will dicate the length after which that happens.
     pub split: u32,
@@ -654,7 +653,7 @@ impl Eq for OccluderPointer {}
 
 impl PartialOrd for OccluderPointer {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        (-self.distance).partial_cmp(&-other.distance)
+        Some(self.cmp(other))
     }
 }
 

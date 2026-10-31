@@ -1,23 +1,20 @@
-//! NOTE: This example hasn't been updated to bevy 0.19 yet!
-//!
 //! This example demonstrates how to apply a shader over the lightmap before it is being applied to the camera's output.
 //!
 //! This is greatly inspired by Bevy's post processing example: https://bevy.org/examples/shaders/custom-post-processing/.
 //! Check out that example for more in-depth comments and explanations.
 
+mod support;
+
 use bevy::{
+    camera::Hdr,
     color::palettes::css::{RED, WHITE},
-    core_pipeline::{FullscreenShader, core_2d::graph::Core2d},
-    ecs::{query::QueryItem, system::lifetimeless::Read},
+    core_pipeline::{Core2d, FullscreenShader},
     prelude::*,
     render::{
         Render, RenderApp, RenderStartup, RenderSystems,
         extract_component::{
             ComponentUniforms, DynamicUniformIndex, ExtractComponent, ExtractComponentPlugin,
             UniformComponentPlugin,
-        },
-        render_graph::{
-            NodeRunError, RenderGraphContext, RenderGraphExt, RenderLabel, ViewNode, ViewNodeRunner,
         },
         render_resource::{
             BindGroupEntries, BindGroupLayoutDescriptor, BindGroupLayoutEntries,
@@ -28,26 +25,31 @@ use bevy::{
             TextureUsages,
             binding_types::{sampler, texture_2d, uniform_buffer},
         },
-        renderer::{RenderContext, RenderDevice},
+        renderer::{RenderContext, RenderDevice, ViewQuery},
         texture::{CachedTexture, TextureCache},
-        view::{ExtractedView, Hdr, ViewTarget},
+        view::{ExtractedView, ViewTarget},
     },
     window::PrimaryWindow,
 };
-use bevy_firefly::{ApplyLightmapLabel, CreateLightmapLabel, LightMapTexture, prelude::*};
+use bevy_firefly::{
+    LightMapTexture,
+    nodes::{apply_lightmap, create_lightmap},
+    prelude::*,
+};
 
 // The shader that will apply the noise over the lightmap.
-const NOISE_SHADER_ASSET_PATH: &str = "shaders/noise.wgsl";
+const NOISE_SHADER_ASSET_PATH: &str = "shaders/noise.wesl";
 
 // Simple shader which writes the pixels of a texture unto another texture.
-const TRANSFER_SHADER_ASSET_PATH: &str = "shaders/transfer.wgsl";
+const TRANSFER_SHADER_ASSET_PATH: &str = "shaders/transfer.wesl";
 
 fn main() {
-    App::new()
-        .add_plugins((DefaultPlugins, FireflyPlugin, LightmapEditPlugin))
+    let mut app = App::new();
+    app.add_plugins((DefaultPlugins, FireflyPlugin, LightmapEditPlugin))
         .add_systems(Startup, setup)
-        .add_systems(Update, (update_time, move_light))
-        .run();
+        .add_systems(Update, (update_time, move_light));
+    support::install(&mut app);
+    app.run();
 }
 
 fn setup(mut commands: Commands) {
@@ -104,7 +106,7 @@ fn move_light(
 
     let Some(cursor_position) = window
         .cursor_position()
-        .and_then(|cursor| camera.0.viewport_to_world_2d(&camera.1, cursor).ok())
+        .and_then(|cursor| camera.0.viewport_to_world_2d(camera.1, cursor).ok())
     else {
         return;
     };
@@ -130,12 +132,10 @@ impl Plugin for LightmapEditPlugin {
         render_app
             .add_systems(RenderStartup, (init_noise_pipeline, init_transfer_pipeline))
             .add_systems(Render, prepare_empty_texture.in_set(RenderSystems::Prepare))
-            .add_render_graph_node::<ViewNodeRunner<NoiseNode>>(Core2d, NoiseLabel)
-            .add_render_graph_edges(
+            .add_systems(
                 Core2d,
-                // `NoiseLabel` is added between `CreateLightmapLabel` and `ApplyLightmapLabel`.
-                // This makes our render pass execute after the lightmap is created but before it is applied to the camera.
-                (CreateLightmapLabel, NoiseLabel, ApplyLightmapLabel),
+                // Edit the lightmap after it is created and before it is applied to the camera.
+                apply_noise.after(create_lightmap).before(apply_lightmap),
             );
     }
 }
@@ -145,13 +145,10 @@ fn prepare_empty_texture(
     mut commands: Commands,
     render_device: Res<RenderDevice>,
     mut texture_cache: ResMut<TextureCache>,
-    view_targets: Query<(Entity, &ViewTarget, &ExtractedView)>,
+    view_targets: Query<(Entity, &ViewTarget, &ExtractedView), With<NoiseSettings>>,
 ) {
     for (entity, view_target, view) in &view_targets {
-        let format = match view.hdr {
-            true => ViewTarget::TEXTURE_FORMAT_HDR,
-            false => TextureFormat::bevy_default(),
-        };
+        let format = view.target_format;
 
         let empty_texture = texture_cache.get(
             &render_device,
@@ -177,6 +174,7 @@ struct EmptyTexture(pub CachedTexture);
 
 // Component that will be extracted and written to the shader.
 #[derive(Component, Default, Clone, Copy, ExtractComponent, ShaderType)]
+#[extract_app(RenderApp)]
 struct NoiseSettings {
     // time updated each frame
     time: f32,
@@ -184,112 +182,99 @@ struct NoiseSettings {
     kf: f32,
 }
 
-#[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
-struct NoiseLabel;
-
-#[derive(Default)]
-struct NoiseNode;
-
-impl ViewNode for NoiseNode {
-    type ViewQuery = (
-        &'static NoiseSettings,
-        &'static DynamicUniformIndex<NoiseSettings>,
+fn apply_noise(
+    view: ViewQuery<(
+        &DynamicUniformIndex<NoiseSettings>,
         // We need to query the lightmap texture in order to change it.
-        Read<LightMapTexture>,
-        Read<EmptyTexture>,
-    );
+        &LightMapTexture,
+        &EmptyTexture,
+    )>,
+    noise_pipeline_data: Res<NoisePipeline>,
+    transfer_pipeline_data: Res<TransferPipeline>,
+    pipeline_cache: Res<PipelineCache>,
+    settings_uniforms: Res<ComponentUniforms<NoiseSettings>>,
+    mut render_context: RenderContext,
+) {
+    let (settings_index, lightmap, empty_texture) = view.into_inner();
 
-    fn run(
-        &self,
-        _graph: &mut RenderGraphContext,
-        render_context: &mut RenderContext,
-        (_noise_settings, settings_index, lightmap, empty_texture): QueryItem<Self::ViewQuery>,
-        world: &World,
-    ) -> Result<(), NodeRunError> {
-        let noise_pipeline_data = world.resource::<NoisePipeline>();
-        let transfer_pipeline_data = world.resource::<TransferPipeline>();
+    let (Some(noise_pipeline), Some(transfer_pipeline)) = (
+        pipeline_cache.get_render_pipeline(noise_pipeline_data.pipeline_id),
+        pipeline_cache.get_render_pipeline(transfer_pipeline_data.pipeline_id),
+    ) else {
+        return;
+    };
 
-        let pipeline_cache = world.resource::<PipelineCache>();
+    let Some(settings_binding) = settings_uniforms.uniforms().binding() else {
+        return;
+    };
 
-        let (Some(noise_pipeline), Some(transfer_pipeline)) = (
-            pipeline_cache.get_render_pipeline(noise_pipeline_data.pipeline_id),
-            pipeline_cache.get_render_pipeline(transfer_pipeline_data.pipeline_id),
-        ) else {
-            return Ok(());
-        };
+    // Reading a texture and outputting to it at the same time is not supported, so two render passes are made:
+    // One to read the lightmap, apply the noise, and output to a temporary texture (`EmptyTexture`),
+    // and another to read from the temporary texture and output back to the lightmap.
+    //
+    // This is why `TransferPipeline` and `transfer.wesl` are needed.
 
-        let settings_uniforms = world.resource::<ComponentUniforms<NoiseSettings>>();
-        let Some(settings_binding) = settings_uniforms.uniforms().binding() else {
-            return Ok(());
-        };
+    // The first render pass
+    {
+        let noise_bind_group = render_context.render_device().create_bind_group(
+            "noise_bind_group",
+            &pipeline_cache.get_bind_group_layout(&noise_pipeline_data.layout),
+            &BindGroupEntries::sequential((
+                // Binding the lightmap to the shader
+                &lightmap.0.default_view,
+                &noise_pipeline_data.sampler,
+                settings_binding.clone(),
+            )),
+        );
 
-        // Reading a texture and outputting to it at the same time is not supported, so two render passes are made:
-        // One to read the lightmap, apply the noise, and output to a temporary texture (`EmptyTexture`),
-        // and another to read from the temporary texture and output back to the lightmap.
-        //
-        // This is why `TransferPipeline` and `transfer.wgsl` are needed.
+        let mut render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
+            label: Some("noise_pass"),
+            color_attachments: &[Some(RenderPassColorAttachment {
+                // Setting the output to be EmptyTexture
+                view: &empty_texture.0.default_view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: Operations::default(),
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        render_pass.set_render_pipeline(noise_pipeline);
+        render_pass.set_bind_group(0, &noise_bind_group, &[settings_index.index()]);
+        render_pass.draw(0..3, 0..1);
+    }
 
-        // The first render pass
-        {
-            let noise_bind_group = render_context.render_device().create_bind_group(
-                "noise_bind_group",
-                &pipeline_cache.get_bind_group_layout(&noise_pipeline_data.layout),
-                &BindGroupEntries::sequential((
-                    // Binding the lightmap to the shader
-                    &lightmap.0.default_view,
-                    &noise_pipeline_data.sampler,
-                    settings_binding.clone(),
-                )),
-            );
+    // The second render pass
+    {
+        let transfer_bind_group = render_context.render_device().create_bind_group(
+            "transfer_bind_group",
+            &pipeline_cache.get_bind_group_layout(&transfer_pipeline_data.layout),
+            &BindGroupEntries::sequential((
+                // Binding the temporary texture to the shader
+                &empty_texture.0.default_view,
+                &transfer_pipeline_data.sampler,
+            )),
+        );
 
-            let mut render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
-                label: Some("noise_pass"),
-                color_attachments: &[Some(RenderPassColorAttachment {
-                    // Setting the output to be EmptyTexture
-                    view: &empty_texture.0.default_view,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: Operations::default(),
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
-            render_pass.set_render_pipeline(noise_pipeline);
-            render_pass.set_bind_group(0, &noise_bind_group, &[settings_index.index()]);
-            render_pass.draw(0..3, 0..1);
-        }
-
-        // The second render pass
-        {
-            let transfer_bind_group = render_context.render_device().create_bind_group(
-                "tranfer_bind_group",
-                &pipeline_cache.get_bind_group_layout(&transfer_pipeline_data.layout),
-                &BindGroupEntries::sequential((
-                    // Binding the temporary texture to the shader
-                    &empty_texture.0.default_view,
-                    &transfer_pipeline_data.sampler,
-                )),
-            );
-
-            let mut render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
-                label: Some("transfer_pass"),
-                color_attachments: &[Some(RenderPassColorAttachment {
-                    // Setting the output to be the lightmap
-                    view: &lightmap.0.default_view,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: Operations::default(),
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
-            render_pass.set_render_pipeline(transfer_pipeline);
-            render_pass.set_bind_group(0, &transfer_bind_group, &[]);
-            render_pass.draw(0..3, 0..1);
-        }
-        Ok(())
+        let mut render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
+            label: Some("transfer_pass"),
+            color_attachments: &[Some(RenderPassColorAttachment {
+                // Setting the output to be the lightmap
+                view: &lightmap.0.default_view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: Operations::default(),
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        render_pass.set_render_pipeline(transfer_pipeline);
+        render_pass.set_bind_group(0, &transfer_bind_group, &[]);
+        render_pass.draw(0..3, 0..1);
     }
 }
 
@@ -335,8 +320,8 @@ fn init_noise_pipeline(
         fragment: Some(FragmentState {
             shader,
             targets: vec![Some(ColorTargetState {
-                // NOTE: if not using HDR, change the format to `TextureFormat::bevy_default()`.
-                format: ViewTarget::TEXTURE_FORMAT_HDR,
+                // Match the HDR camera target format; update this if the camera format changes.
+                format: TextureFormat::Rgba16Float,
                 blend: None,
                 write_mask: ColorWrites::ALL,
             })],
@@ -384,14 +369,14 @@ fn init_transfer_pipeline(
 
     let vertex_state = fullscreen_shader.to_vertex_state();
     let pipeline_id = pipeline_cache.queue_render_pipeline(RenderPipelineDescriptor {
-        label: Some("noise_pipeline".into()),
+        label: Some("transfer_pipeline".into()),
         layout: vec![layout.clone()],
         vertex: vertex_state,
         fragment: Some(FragmentState {
             shader,
             targets: vec![Some(ColorTargetState {
-                // NOTE: if not using HDR, change the format to `TextureFormat::bevy_default()`.
-                format: ViewTarget::TEXTURE_FORMAT_HDR,
+                // Match the HDR camera target format; update this if the camera format changes.
+                format: TextureFormat::Rgba16Float,
                 blend: None,
                 write_mask: ColorWrites::ALL,
             })],

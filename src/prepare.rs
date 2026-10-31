@@ -1,6 +1,5 @@
 //! Module that prepares BindGroups for GPU use.
 
-use core::f32;
 use std::f32::consts::{FRAC_PI_2, PI, TAU};
 
 use crate::{
@@ -26,10 +25,7 @@ use crate::{
 use bevy::{
     camera::visibility::RenderLayers,
     core_pipeline::tonemapping::{Tonemapping, TonemappingLuts, get_lut_bindings},
-    math::{
-        Affine3A,
-        bounding::{Aabb2d, IntersectsVolume},
-    },
+    math::Affine3A,
     platform::{
         collections::{HashMap, HashSet},
         hash::FixedHasher,
@@ -47,6 +43,7 @@ use bevy::{
         texture::{FallbackImage, GpuImage, TextureCache},
         view::{ExtractedView, RetainedViewEntity, ViewTarget, ViewUniforms},
     },
+    shape::{Aabb2d, IntersectsVolume},
     tasks::{ComputeTaskPool, ParallelSliceMut},
 };
 
@@ -76,12 +73,16 @@ impl Plugin for PreparePlugin {
 
         render_app.add_systems(
             Render,
-            specialize_light_application_pipeline.in_set(RenderSystems::Prepare),
+            (
+                retire_disabled_views,
+                prepare_lightmap,
+                prepare_config,
+                specialize_light_application_pipeline,
+                prepare_data,
+            )
+                .chain()
+                .in_set(RenderSystems::PrepareResources),
         );
-
-        render_app.add_systems(Render, prepare_data.in_set(RenderSystems::Prepare));
-        render_app.add_systems(Render, prepare_config.in_set(RenderSystems::Prepare));
-        render_app.add_systems(Render, prepare_lightmap.in_set(RenderSystems::Prepare));
 
         render_app.add_systems(
             Render,
@@ -142,6 +143,18 @@ fn prepare_config(
 ) {
     for (entity, config, view_target, combined_lightmap) in &configs {
         let window_size = view_target.main_texture().size();
+        let limits = render_device.limits();
+        if lightmap_extent(
+            window_size,
+            config.lightmap_size,
+            limits.max_texture_dimension_2d,
+        )
+        .is_err()
+            || combined_lightmap
+                .is_some_and(|maps| maps.0.len() > limits.max_texture_array_layers as usize)
+        {
+            continue;
+        }
         let scale = match config.lightmap_size {
             LightmapSize::Window => vec2(1.0, 1.0),
             LightmapSize::Fixed(size) => vec2(
@@ -201,6 +214,64 @@ fn prepare_config(
     }
 }
 
+// These resources belong only to this camera's Firefly presentation.
+fn retire_view(commands: &mut Commands, entity: Entity) {
+    commands.entity(entity).remove::<(
+        LightMapTexture,
+        SpriteStencilTexture,
+        NormalMapTexture,
+        CombinedLightMapTextures,
+        BufferedFireflyConfig,
+        SpecializedApplicationPipeline,
+        SpriteViewBindGroup,
+    )>();
+}
+
+fn retire_disabled_views(
+    mut commands: Commands,
+    views: Query<Entity, (With<LightMapTexture>, Without<FireflyConfig>)>,
+) {
+    for entity in &views {
+        retire_view(&mut commands, entity);
+    }
+}
+
+#[derive(Debug, PartialEq)]
+enum InvalidLightmapExtent {
+    NonFinite,
+    Empty,
+    DeviceLimit,
+}
+
+fn lightmap_extent(
+    window: Extent3d,
+    size: LightmapSize,
+    maximum: u32,
+) -> Result<Extent3d, InvalidLightmapExtent> {
+    let (width, height) = match size {
+        LightmapSize::Window => (f64::from(window.width), f64::from(window.height)),
+        LightmapSize::Fixed(size) => (f64::from(size.x), f64::from(size.y)),
+        LightmapSize::Scaled(scale) => (
+            f64::from(window.width) * f64::from(scale),
+            f64::from(window.height) * f64::from(scale),
+        ),
+    };
+    if !width.is_finite() || !height.is_finite() {
+        return Err(InvalidLightmapExtent::NonFinite);
+    }
+    if width < 1.0 || height < 1.0 {
+        return Err(InvalidLightmapExtent::Empty);
+    }
+    if width > f64::from(maximum) || height > f64::from(maximum) {
+        return Err(InvalidLightmapExtent::DeviceLimit);
+    }
+    Ok(Extent3d {
+        width: width as u32,
+        height: height as u32,
+        depth_or_array_layers: 1,
+    })
+}
+
 fn prepare_lightmap(
     mut commands: Commands,
     render_device: Res<RenderDevice>,
@@ -218,19 +289,25 @@ fn prepare_lightmap(
         let format = view.target_format;
         let window_size = view_target.main_texture().size();
 
-        let size = match config.lightmap_size {
-            LightmapSize::Window => window_size,
-            LightmapSize::Fixed(size) => Extent3d {
-                width: size.x,
-                height: size.y,
-                depth_or_array_layers: 1,
-            },
-            LightmapSize::Scaled(scale) => Extent3d {
-                width: (window_size.width as f32 * scale) as u32,
-                height: (window_size.height as f32 * scale) as u32,
-                depth_or_array_layers: 1,
-            },
+        let limits = render_device.limits();
+        let Ok(size) = lightmap_extent(
+            window_size,
+            config.lightmap_size,
+            limits.max_texture_dimension_2d,
+        ) else {
+            warn_once!("Invalid Firefly lightmap extent; lighting is disabled for this view");
+            retire_view(&mut commands, entity);
+            continue;
         };
+        if combined_lightmaps
+            .is_some_and(|maps| maps.0.len() > limits.max_texture_array_layers as usize)
+        {
+            warn_once!(
+                "Firefly combined lightmaps exceed the device layer limit; lighting is disabled for this view"
+            );
+            retire_view(&mut commands, entity);
+            continue;
+        }
 
         let light_map_texture = texture_cache.get(
             &render_device,
@@ -308,6 +385,8 @@ fn prepare_lightmap(
             commands
                 .entity(entity)
                 .insert(CombinedLightMapTextures(texture));
+        } else {
+            commands.entity(entity).remove::<CombinedLightMapTextures>();
         }
     }
 }
@@ -945,7 +1024,7 @@ fn prepare_sprite_image_bind_groups(
         let mut current_batch = None;
         let mut batch_item_index = 0;
         let mut batch_image_size = Vec2::ZERO;
-        let mut batch_image_handle = AssetId::invalid();
+        let mut batch_image_handle = None;
         let mut batch_normal_handle;
         let mut is_dummy;
 
@@ -963,20 +1042,20 @@ fn prepare_sprite_image_bind_groups(
                 // If there is a phase item that is not a sprite, then we must start a new
                 // batch to draw the other phase item(s) and to respect draw order. This can be
                 // done by invalidating the batch_image_handle
-                batch_image_handle = AssetId::invalid();
+                batch_image_handle = None;
                 continue;
             };
 
-            if batch_image_handle != extracted_sprite.image_handle_id {
+            if batch_image_handle != Some(extracted_sprite.image_handle_id) {
                 let Some(gpu_image) = gpu_images.get(extracted_sprite.image_handle_id) else {
                     continue;
                 };
 
                 batch_image_size = gpu_image.size_2d().as_vec2();
-                batch_image_handle = extracted_sprite.image_handle_id;
+                batch_image_handle = Some(extracted_sprite.image_handle_id);
 
                 (batch_normal_handle, is_dummy) = match extracted_sprite.normal_handle_id {
-                    None => (batch_image_handle, true),
+                    None => (extracted_sprite.image_handle_id, true),
                     Some(x) => (x, false),
                 };
 
@@ -997,7 +1076,11 @@ fn prepare_sprite_image_bind_groups(
 
                 image_bind_groups
                     .values
-                    .entry((batch_image_handle, batch_normal_handle, is_dummy))
+                    .entry((
+                        extracted_sprite.image_handle_id,
+                        batch_normal_handle,
+                        is_dummy,
+                    ))
                     .or_insert_with(|| {
                         render_device.create_bind_group(
                             "sprite_material_bind_group",
@@ -1014,7 +1097,7 @@ fn prepare_sprite_image_bind_groups(
                 batch_item_index = item_index;
                 current_batch = Some(batches.entry((*retained_view, item.entity())).insert(
                     SpriteBatch {
-                        image_handle_id: batch_image_handle,
+                        image_handle_id: extracted_sprite.image_handle_id,
                         normal_handle_id: batch_normal_handle,
                         normal_dummy: is_dummy,
                         range: index..index,
@@ -1184,5 +1267,58 @@ fn prepare_sprite_image_bind_groups(
                 .sprite_index_buffer
                 .write_buffer(&render_device, &render_queue);
         }
+    }
+}
+
+#[cfg(test)]
+mod extent_tests {
+    use super::*;
+    #[test]
+    fn lightmap_extents_validate_before_cast_or_allocation() {
+        let window = Extent3d {
+            width: 256,
+            height: 128,
+            depth_or_array_layers: 1,
+        };
+        for value in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            assert_eq!(
+                lightmap_extent(window, LightmapSize::Scaled(value), 4096),
+                Err(InvalidLightmapExtent::NonFinite)
+            );
+        }
+        for value in [0.0, -1.0, 0.001] {
+            assert_eq!(
+                lightmap_extent(window, LightmapSize::Scaled(value), 4096),
+                Err(InvalidLightmapExtent::Empty)
+            );
+        }
+        assert_eq!(
+            lightmap_extent(window, LightmapSize::Fixed(UVec2::ZERO), 4096),
+            Err(InvalidLightmapExtent::Empty)
+        );
+        assert_eq!(
+            lightmap_extent(window, LightmapSize::Fixed(UVec2::splat(4097)), 4096),
+            Err(InvalidLightmapExtent::DeviceLimit)
+        );
+        assert_eq!(
+            lightmap_extent(window, LightmapSize::Scaled(f32::MAX), 4096),
+            Err(InvalidLightmapExtent::DeviceLimit)
+        );
+        assert_eq!(
+            lightmap_extent(window, LightmapSize::Fixed(UVec2::ONE), 4096)
+                .unwrap()
+                .width,
+            1
+        );
+        assert_eq!(
+            lightmap_extent(window, LightmapSize::Fixed(UVec2::splat(4096)), 4096)
+                .unwrap()
+                .width,
+            4096
+        );
+        assert_eq!(
+            lightmap_extent(window, LightmapSize::Window, 4096).unwrap(),
+            window
+        );
     }
 }

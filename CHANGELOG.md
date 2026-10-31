@@ -1,3 +1,21 @@
+# BLG fork: 0.20.0 (unpublished)
+
+- Target Bevy 0.20.1 and Rust >=1.97.1; retain an exact reproducible example/test lock.
+- Port six embedded shader modules to WESL and path-based imports.
+- Adapt extraction, lifecycle observers, compositing and sprite visibility to
+  current public APIs; retain Firefly's custom stencil/normal pass and lighting.
+- Preserve slice geometry used by that pass with Bevy attribution/regressions.
+- Port the existing noise example from obsolete graph nodes to Core2d systems.
+- Retain actual GPU pipeline/view-lifecycle proof and opt-in native example captures.
+- Order custom visibility after Bevy culling; preserve scene coverage when applying
+  illumination under 0.20's per-target camera blending. Retire invalid/disabled
+  view products and stale combined-source bindings, with recovery regressions.
+- Update public API snippets and compile-check the unbounded app example without
+  running its event loop in doctests; dedicated native fixtures prove rendering.
+- Upstream base: 6cf3557b8e5bd6f1086ce65c77bf2cf0c18877cb.
+  Published 0.19.0 source: 77f25734d9c70d30cc77b1db0aa512d52a74c737.
+  No crates.io publication or upstream ownership transfer.
+
 Newer release notes have been moved to their own [folder](https://github.com/PVDoriginal/firefly/tree/main/release-notes).
 
 # 0.18.0 

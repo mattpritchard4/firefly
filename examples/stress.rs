@@ -1,3 +1,5 @@
+mod support;
+
 use bevy::{
     color::palettes::{
         self,
@@ -10,7 +12,7 @@ use bevy::{
     prelude::*,
     window::PresentMode,
 };
-use bevy_firefly::{occluders::Occluder2dEnabled, prelude::*};
+use bevy_firefly::prelude::*;
 use rand::{Rng, rng, seq::IndexedRandom};
 
 #[derive(Resource)]
@@ -69,7 +71,7 @@ fn main() {
         Update,
         update_commands.run_if(
             resource_exists_and_changed::<LogDiagnosticsStatus>
-                .or(resource_exists_and_changed::<LogDiagnosticsFilters>),
+                .or_else(resource_exists_and_changed::<LogDiagnosticsFilters>),
         ),
     );
 
@@ -77,6 +79,7 @@ fn main() {
     app.init_resource::<LogDiagnosticsStatus>();
     app.init_resource::<LogDiagnosticsFilters>();
 
+    support::install(&mut app);
     app.run();
 }
 
@@ -147,7 +150,7 @@ fn spawn_lights(mut commands: Commands, mut timers: ResMut<Timers>, time: Res<Ti
 
         commands.spawn((
             PointLight2d {
-                color: *COLORS.map(|c| Color::Srgba(c)).choose(&mut rng).unwrap(),
+                color: *COLORS.map(Color::Srgba).choose(&mut rng).unwrap(),
                 intensity: 1.,
                 radius: r,
                 // cast_shadows: false,

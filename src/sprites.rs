@@ -15,7 +15,7 @@ use bevy::asset::{AssetEventSystems, AssetPath};
 use bevy::image::ImageLoaderSettings;
 use bevy::render::RenderSystems;
 use bevy::render::camera::ExtractedCamera;
-use bevy::sprite_render::{SpriteSystems, queue_material2d_meshes};
+use bevy::sprite_render::queue_material2d_meshes;
 use bevy::{
     core_pipeline::{
         core_2d::{AlphaMask2d, Opaque2d},
@@ -171,21 +171,29 @@ pub(crate) struct ImageBindGroups {
 ///
 /// Automatic image loading:
 /// ```
+/// # use bevy::prelude::*;
+/// # use bevy_firefly::prelude::*;
+/// # fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
 /// commands.spawn((
 ///     Sprite::from_image(asset_server.load("some_sprite.png")),
-///     NormalMap::from_file("some_sprite_normal.png"),
+///     NormalMap::from_file("some_sprite_normal.png", &asset_server),
 /// ));
+/// # }
 /// ```
 ///
 /// Manual image loading:
 ///
 /// ```
-/// let image: Handle<Image> = asset_server.load_with_settings("some_sprite_normal.png", |x: &mut ImageLoaderSettings| x.is_srgb = false);
+/// # use bevy::{prelude::*, image::ImageLoaderSettings};
+/// # use bevy_firefly::prelude::*;
+/// # fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
+/// let image: Handle<Image> = asset_server.load_builder().with_settings(|x: &mut ImageLoaderSettings| x.is_srgb = false).load("some_sprite_normal.png");
 ///
 /// commands.spawn((
 ///     Sprite::from_image(asset_server.load("some_sprite.png")),
 ///     NormalMap::from_image(image),
 /// ));
+/// # }
 /// ```
 ///  
 /// See [Sprite] for more information on using sprites.
@@ -216,8 +224,10 @@ impl NormalMap {
     ///
     /// You can use [`.handle()`](NormalMap::handle) to get the resulting image handle.
     pub fn from_file<'a>(path: impl Into<AssetPath<'a>>, asset_server: &AssetServer) -> Self {
-        let image: Handle<Image> =
-            asset_server.load_with_settings(path, |x: &mut ImageLoaderSettings| x.is_srgb = false);
+        let image: Handle<Image> = asset_server
+            .load_builder()
+            .with_settings(|x: &mut ImageLoaderSettings| x.is_srgb = false)
+            .load(path);
 
         Self { image }
     }
@@ -225,7 +235,10 @@ impl NormalMap {
     /// Construct a new [NormalMap] from an image handle. It's important that this image is loaded without gamma correction:
     ///
     /// ```
-    /// let image: Handle<Image> = asset_server.load_with_settings(path, |x: &mut ImageLoaderSettings| x.is_srgb = false);
+    /// # use bevy::{prelude::*, image::ImageLoaderSettings};
+    /// # fn load_normal(asset_server: &AssetServer) {
+    /// let image: Handle<Image> = asset_server.load_builder().with_settings(|x: &mut ImageLoaderSettings| x.is_srgb = false).load("some_sprite_normal.png");
+    /// # }
     /// ```
     ///
     /// You can use the [`from_file`](NormalMap::from_file) constructor to handle this automatically for you, and later grab the handle
@@ -245,8 +258,7 @@ impl Plugin for SpritesPlugin {
             ((
                 compute_slices_on_asset_event.before(AssetEventSystems),
                 compute_slices_on_sprite_change,
-            )
-                .in_set(SpriteSystems::ComputeSlices),),
+            ),),
         );
 
         if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
@@ -265,7 +277,7 @@ impl Plugin for SpritesPlugin {
                         sort_phase_system::<SpritePhase>.in_set(RenderSystems::PhaseSort),
                         queue_sprites
                             .in_set(RenderSystems::Queue)
-                            .ambiguous_with(queue_material2d_meshes::<ColorMaterial>),
+                            .ambiguous_with(queue_material2d_meshes),
                         sort_binned_render_phase::<Opaque2d>.in_set(RenderSystems::PhaseSort),
                         sort_binned_render_phase::<AlphaMask2d>.in_set(RenderSystems::PhaseSort),
                     ),
@@ -309,10 +321,11 @@ fn queue_sprites(
         let mut view_key = SpritePipelineKey::from_target_format(view.target_format) | msaa_key;
 
         if !camera.hdr {
-            if let Some(tonemapping) = tonemapping {
+            if let Some(tonemapping) = tonemapping.filter(|method| **method != Tonemapping::None) {
                 view_key |= SpritePipelineKey::TONEMAP_IN_SHADER;
                 view_key |= match tonemapping {
                     Tonemapping::None => SpritePipelineKey::TONEMAP_METHOD_NONE,
+                    Tonemapping::Linear => SpritePipelineKey::TONEMAP_METHOD_LINEAR,
                     Tonemapping::Reinhard => SpritePipelineKey::TONEMAP_METHOD_REINHARD,
                     Tonemapping::ReinhardLuminance => {
                         SpritePipelineKey::TONEMAP_METHOD_REINHARD_LUMINANCE
@@ -339,7 +352,7 @@ fn queue_sprites(
         let pipeline = pipelines.specialize(&pipeline_cache, &pipeline, view_key);
 
         view_entities.clear();
-        if let Some(visible_entities) = visible_entities.get::<Sprite>() {
+        if let Some(visible_entities) = visible_entities.get::<Mesh2d>() {
             view_entities.extend(
                 visible_entities
                     .iter_visible()
