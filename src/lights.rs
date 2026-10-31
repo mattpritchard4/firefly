@@ -3,7 +3,6 @@ use bevy::{
     color::palettes::css::WHITE,
     core_pipeline::tonemapping::{DebandDither, Tonemapping},
     ecs::{
-        change_detection::Tick,
         query::ROQueryItem,
         system::{
             SystemParamItem,
@@ -367,6 +366,7 @@ fn queue_lights(
     views: Query<(
         &ExtractedView,
         &ExtractedCamera,
+        Option<&bevy::render::view::ResolvedCompositingSpace>,
         &RenderVisibleEntities,
         &Msaa,
         Option<&Tonemapping>,
@@ -377,14 +377,24 @@ fn queue_lights(
 ) {
     let draw_lightmap_function = light_draw_functions.read().id::<DrawLightmap>();
 
-    for (view, camera, visible_entities, msaa, tonemapping, dither, combined_lightmap) in &views {
+    for (
+        view,
+        camera,
+        compositing,
+        visible_entities,
+        msaa,
+        tonemapping,
+        dither,
+        combined_lightmap,
+    ) in &views
+    {
         let Some(lightmap_phase) = lightmap_phases.get_mut(&view.retained_view_entity) else {
             continue;
         };
 
         let (target_format, msaa) = if let Some(combined_lightmap) = combined_lightmap {
             let view = views.get(combined_lightmap.0).unwrap();
-            (view.0.target_format, view.3)
+            (view.0.target_format, view.4)
         } else {
             (view.target_format, msaa)
         };
@@ -392,24 +402,19 @@ fn queue_lights(
         let msaa_key = LightPipelineKey::from_msaa_samples(msaa.samples());
         let mut view_key = LightPipelineKey::from_target_format(target_format) | msaa_key;
 
-        if camera
-            .compositing_space
-            .is_some_and(|s| s == CompositingSpace::Srgb)
-        {
+        if compositing.and_then(|space| space.0) == Some(CompositingSpace::Srgb) {
             view_key |= LightPipelineKey::SRGB_COMPOSITING;
         }
-        if camera
-            .compositing_space
-            .is_some_and(|s| s == CompositingSpace::Oklab)
-        {
+        if compositing.and_then(|space| space.0) == Some(CompositingSpace::Oklab) {
             view_key |= LightPipelineKey::OKLAB_COMPOSITING;
         }
 
         if !camera.hdr {
-            if let Some(tonemapping) = tonemapping {
+            if let Some(tonemapping) = tonemapping.filter(|method| **method != Tonemapping::None) {
                 view_key |= LightPipelineKey::TONEMAP_IN_SHADER;
                 view_key |= match tonemapping {
                     Tonemapping::None => LightPipelineKey::TONEMAP_METHOD_NONE,
+                    Tonemapping::Linear => LightPipelineKey::TONEMAP_METHOD_LINEAR,
                     Tonemapping::Reinhard => LightPipelineKey::TONEMAP_METHOD_REINHARD,
                     Tonemapping::ReinhardLuminance => {
                         LightPipelineKey::TONEMAP_METHOD_REINHARD_LUMINANCE

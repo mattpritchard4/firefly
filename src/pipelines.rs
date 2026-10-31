@@ -22,7 +22,7 @@ use bevy::{
         },
         renderer::RenderDevice,
         view::{
-            COLOR_TARGET_FORMAT_MASK_BITS, ViewTarget, ViewUniform, texture_format_from_code,
+            COLOR_TARGET_FORMAT_MASK_BITS, ViewUniform, texture_format_from_code,
             texture_format_to_code,
         },
     },
@@ -41,13 +41,13 @@ pub struct PipelinePlugin;
 
 impl Plugin for PipelinePlugin {
     fn build(&self, app: &mut App) {
-        load_shader_library!(app, "shaders/types.wgsl");
-        load_shader_library!(app, "shaders/utils.wgsl");
+        load_shader_library!(app, "shaders/types.wesl");
+        load_shader_library!(app, "shaders/utils.wesl");
 
-        embedded_asset!(app, "shaders/create_lightmap.wgsl");
-        embedded_asset!(app, "shaders/apply_lightmap.wgsl");
-        embedded_asset!(app, "shaders/combine_lightmaps.wgsl");
-        embedded_asset!(app, "shaders/sprite.wgsl");
+        embedded_asset!(app, "shaders/create_lightmap.wesl");
+        embedded_asset!(app, "shaders/apply_lightmap.wesl");
+        embedded_asset!(app, "shaders/combine_lightmaps.wesl");
+        embedded_asset!(app, "shaders/sprite.wesl");
 
         let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
             return;
@@ -144,7 +144,7 @@ fn init_lightmap_creation_pipeline(
         lut_layout,
         sampler,
         vertex_state,
-        shader: load_embedded_asset!(asset_server.as_ref(), "shaders/create_lightmap.wgsl"),
+        shader: load_embedded_asset!(asset_server.as_ref(), "shaders/create_lightmap.wesl"),
     });
 }
 
@@ -163,6 +163,7 @@ bitflags::bitflags! {
         const MSAA_RESERVED_BITS                = Self::MSAA_MASK_BITS << Self::MSAA_SHIFT_BITS;
         const TONEMAP_METHOD_RESERVED_BITS      = Self::TONEMAP_METHOD_MASK_BITS << Self::TONEMAP_METHOD_SHIFT_BITS;
         const TONEMAP_METHOD_NONE               = 0 << Self::TONEMAP_METHOD_SHIFT_BITS;
+        const TONEMAP_METHOD_LINEAR             = 9 << Self::TONEMAP_METHOD_SHIFT_BITS;
         const TONEMAP_METHOD_REINHARD           = 1 << Self::TONEMAP_METHOD_SHIFT_BITS;
         const TONEMAP_METHOD_REINHARD_LUMINANCE = 2 << Self::TONEMAP_METHOD_SHIFT_BITS;
         const TONEMAP_METHOD_ACES_FITTED        = 3 << Self::TONEMAP_METHOD_SHIFT_BITS;
@@ -237,6 +238,8 @@ impl SpecializedRenderPipeline for LightmapCreationPipeline {
 
             if method == LightPipelineKey::TONEMAP_METHOD_NONE {
                 shader_defs.push("TONEMAP_METHOD_NONE".into());
+            } else if method == LightPipelineKey::TONEMAP_METHOD_LINEAR {
+                shader_defs.push("TONEMAP_METHOD_LINEAR".into());
             } else if method == LightPipelineKey::TONEMAP_METHOD_REINHARD {
                 shader_defs.push("TONEMAP_METHOD_REINHARD".into());
             } else if method == LightPipelineKey::TONEMAP_METHOD_REINHARD_LUMINANCE {
@@ -249,6 +252,8 @@ impl SpecializedRenderPipeline for LightmapCreationPipeline {
                 shader_defs.push("TONEMAP_METHOD_SOMEWHAT_BORING_DISPLAY_TRANSFORM".into());
             } else if method == LightPipelineKey::TONEMAP_METHOD_BLENDER_FILMIC {
                 shader_defs.push("TONEMAP_METHOD_BLENDER_FILMIC".into());
+            } else if method == LightPipelineKey::TONEMAP_METHOD_PBR_NEUTRAL {
+                shader_defs.push("TONEMAP_METHOD_PBR_NEUTRAL".into());
             } else if method == LightPipelineKey::TONEMAP_METHOD_TONY_MC_MAPFACE {
                 shader_defs.push("TONEMAP_METHOD_TONY_MC_MAPFACE".into());
             }
@@ -265,6 +270,7 @@ impl SpecializedRenderPipeline for LightmapCreationPipeline {
             layout: vec![self.lut_layout.clone(), self.layout.clone()],
             vertex: self.vertex_state.clone(),
             fragment: Some(FragmentState {
+                constants: default(),
                 shader: self.shader.clone(),
                 targets: vec![Some(ColorTargetState {
                     format,
@@ -377,7 +383,7 @@ fn init_lightmap_application_pipeline(
         filtering_sampler,
         non_filtering_sampler,
         vertex_state,
-        shader: load_embedded_asset!(asset_server.as_ref(), "shaders/apply_lightmap.wgsl"),
+        shader: load_embedded_asset!(asset_server.as_ref(), "shaders/apply_lightmap.wesl"),
     });
 }
 
@@ -406,6 +412,7 @@ impl SpecializedRenderPipeline for LightmapApplicationPipeline {
             layout: vec![self.specialize_layout(combined, filter_lightmap)],
             vertex: self.vertex_state.clone(),
             fragment: Some(FragmentState {
+                constants: default(),
                 shader: self.shader.clone(),
                 targets: vec![Some(ColorTargetState {
                     format,
@@ -463,7 +470,7 @@ fn init_lightmap_combination_pipeline(
         layout,
         sampler,
         vertex_state,
-        shader: load_embedded_asset!(asset_server.as_ref(), "shaders/combine_lightmaps.wgsl"),
+        shader: load_embedded_asset!(asset_server.as_ref(), "shaders/combine_lightmaps.wesl"),
     });
 }
 
@@ -477,6 +484,7 @@ impl SpecializedRenderPipeline for LightmapCombinationPipeline {
             layout: vec![self.layout.clone()],
             vertex: self.vertex_state.clone(),
             fragment: Some(FragmentState {
+                constants: default(),
                 shader: self.shader.clone(),
                 targets: vec![Some(ColorTargetState {
                     format,
@@ -546,7 +554,7 @@ fn init_sprite_pipeline(mut commands: Commands, asset_server: Res<AssetServer>) 
     commands.insert_resource(SpritePipeline {
         view_layout,
         material_layout,
-        shader: load_embedded_asset!(asset_server.as_ref(), "shaders/sprite.wgsl"),
+        shader: load_embedded_asset!(asset_server.as_ref(), "shaders/sprite.wesl"),
     });
 }
 
@@ -570,6 +578,8 @@ impl SpecializedRenderPipeline for SpritePipeline {
 
             if method == SpritePipelineKey::TONEMAP_METHOD_NONE {
                 shader_defs.push("TONEMAP_METHOD_NONE".into());
+            } else if method == SpritePipelineKey::TONEMAP_METHOD_LINEAR {
+                shader_defs.push("TONEMAP_METHOD_LINEAR".into());
             } else if method == SpritePipelineKey::TONEMAP_METHOD_REINHARD {
                 shader_defs.push("TONEMAP_METHOD_REINHARD".into());
             } else if method == SpritePipelineKey::TONEMAP_METHOD_REINHARD_LUMINANCE {
@@ -583,6 +593,8 @@ impl SpecializedRenderPipeline for SpritePipeline {
                 shader_defs.push("TONEMAP_METHOD_SOMEWHAT_BORING_DISPLAY_TRANSFORM".into());
             } else if method == SpritePipelineKey::TONEMAP_METHOD_BLENDER_FILMIC {
                 shader_defs.push("TONEMAP_METHOD_BLENDER_FILMIC".into());
+            } else if method == SpritePipelineKey::TONEMAP_METHOD_PBR_NEUTRAL {
+                shader_defs.push("TONEMAP_METHOD_PBR_NEUTRAL".into());
             } else if method == SpritePipelineKey::TONEMAP_METHOD_TONY_MC_MAPFACE {
                 shader_defs.push("TONEMAP_METHOD_TONY_MC_MAPFACE".into());
             }
@@ -649,12 +661,14 @@ impl SpecializedRenderPipeline for SpritePipeline {
 
         RenderPipelineDescriptor {
             vertex: VertexState {
+                constants: default(),
                 shader: self.shader.clone(),
                 entry_point: Some("vertex".into()),
                 shader_defs: shader_defs.clone(),
                 buffers: vec![instance_rate_vertex_buffer_layout],
             },
             fragment: Some(FragmentState {
+                constants: default(),
                 shader: self.shader.clone(),
                 shader_defs,
                 entry_point: Some("fragment".into()),
@@ -706,6 +720,7 @@ bitflags::bitflags! {
         const MSAA_RESERVED_BITS                = Self::MSAA_MASK_BITS << Self::MSAA_SHIFT_BITS;
         const TONEMAP_METHOD_RESERVED_BITS      = Self::TONEMAP_METHOD_MASK_BITS << Self::TONEMAP_METHOD_SHIFT_BITS;
         const TONEMAP_METHOD_NONE               = 0 << Self::TONEMAP_METHOD_SHIFT_BITS;
+        const TONEMAP_METHOD_LINEAR             = 9 << Self::TONEMAP_METHOD_SHIFT_BITS;
         const TONEMAP_METHOD_REINHARD           = 1 << Self::TONEMAP_METHOD_SHIFT_BITS;
         const TONEMAP_METHOD_REINHARD_LUMINANCE = 2 << Self::TONEMAP_METHOD_SHIFT_BITS;
         const TONEMAP_METHOD_ACES_FITTED        = 3 << Self::TONEMAP_METHOD_SHIFT_BITS;

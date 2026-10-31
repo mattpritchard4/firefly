@@ -1,3 +1,50 @@
+# BLG-maintained Firefly for Bevy 0.20.1
+
+This is the independently maintained [BLG fork](https://github.com/mattpritchard4/firefly)
+of [PVDoriginal/firefly](https://github.com/PVDoriginal/firefly), based on upstream
+`6cf3557b8e5bd6f1086ce65c77bf2cf0c18877cb`. Upstream history and MIT OR Apache-2.0
+licensing are preserved. This fork does not own or publish the upstream crates.io
+name. `publish = false`; consume an immutable reviewed Git revision.
+
+The port targets **Bevy =0.20.1**, **Rust >=1.97.1** and WGPU 30. The recorded
+local compiler is installed nightly 1.100.0-nightly (2026-09-14), not a claim of
+minimum-stable qualification. Keep this fork's own `target/` and committed lock.
+Use your Rustup Cargo/rustc proxies when another compiler appears earlier on PATH:
+
+```sh
+PATH="$HOME/.cargo/bin:$PATH" RUSTUP_TOOLCHAIN=nightly cargo test --locked --all-targets --all-features
+PATH="$HOME/.cargo/bin:$PATH" RUSTUP_TOOLCHAIN=nightly cargo clippy --locked --all-targets --all-features -- -D warnings
+```
+
+Run the GPU regression separately on a quiet supported adapter:
+
+```sh
+FIREFLY_EVIDENCE_DIR=/absolute/existing/directory cargo test --locked --test render -- --nocapture
+```
+
+`firefly_shader_variants_and_view_lifecycle` composes the real renderer, compiles
+actual GPU variants and reads rendered images. It is not a software-renderer or
+cross-platform qualification substitute. Firefly's existing `enable f16` shaders
+require `SHADER_F16`; the test reports its absence explicitly. No replacement
+renderer or lighting algorithm is introduced.
+
+For native macOS example inspection, build the selected example, then run
+`python3 scripts/bundle-macos.py simple` and open the printed `.app`. The helper
+copies the built executable and assets; it does not compile or alter OS settings.
+The original .19 all-example build has a known obsolete `noise` example; this
+port updates that example to scheduled render systems and WESL alongside the
+library. Bevy 0.20 removed CPU slicing helpers, so the stencil/normal pass retains
+only its needed geometry, attributed in `src/texture_slice.rs` and
+`LICENSE-BEVY-MIT`, using Bevy's current public configuration types.
+
+Qualification results and exact reviewed revision are recorded in the owning
+BVM.1 pull request; other backends remain unqualified until actually exercised.
+BLG's application dependency adoption and platform composition belong to BVM.2.
+
+---
+
+## Original upstream README and provenance
+
 # Firefly - 2D Lighting for Bevy 
 [![Discord](https://img.shields.io/discord/805147867924267018?logo=discord&color=7289DA)](https://discord.com/channels/691052431525675048/1447681362722033816)
 [![crates.io](https://img.shields.io/crates/v/bevy_firefly)](https://crates.io/crates/bevy_firefly)

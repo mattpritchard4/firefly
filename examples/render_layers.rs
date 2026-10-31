@@ -37,7 +37,7 @@ fn setup(mut commands: Commands) {
 
     commands.spawn((
         Camera2d,
-        Hdr::default(),
+        Hdr,
         Projection::Orthographic(proj.clone()),
         FireflyConfig::default(),
         RenderTarget::Window(WindowRef::Primary),
@@ -46,7 +46,7 @@ fn setup(mut commands: Commands) {
 
     commands.spawn((
         Camera2d,
-        Hdr::default(),
+        Hdr,
         Projection::Orthographic(proj.clone()),
         FireflyConfig::default(),
         RenderTarget::Window(WindowRef::Entity(window2)),
@@ -55,7 +55,7 @@ fn setup(mut commands: Commands) {
 
     commands.spawn((
         Camera2d,
-        Hdr::default(),
+        Hdr,
         Projection::Orthographic(proj.clone()),
         FireflyConfig::default(),
         RenderTarget::Window(WindowRef::Entity(window3)),

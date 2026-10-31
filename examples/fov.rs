@@ -154,7 +154,7 @@ fn drag_objects(
 ) {
     let Some(cursor_position) = window
         .cursor_position()
-        .and_then(|cursor| camera.0.viewport_to_world_2d(&camera.1, cursor).ok())
+        .and_then(|cursor| camera.0.viewport_to_world_2d(camera.1, cursor).ok())
     else {
         dragged.0 = None;
         return;

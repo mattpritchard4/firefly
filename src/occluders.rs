@@ -3,9 +3,9 @@
 use bevy::{
     camera::visibility::{RenderLayers, VisibilityClass, add_visibility_class},
     color::palettes::css::BLACK,
-    math::bounding::{Aabb2d, BoundingVolume},
     prelude::*,
     render::{render_resource::ShaderType, sync_world::SyncToRenderWorld},
+    shape::{Aabb2d, BoundingVolume},
 };
 use bytemuck::{NoUninit, Pod, Zeroable};
 use core::f32;
@@ -308,7 +308,7 @@ fn normalize_vertices(mut vertices: Vec<Vec2>) -> Vec<Vec2> {
     }
 }
 
-fn is_concave(vertices: &Vec<Vec2>) -> bool {
+fn is_concave(vertices: &[Vec2]) -> bool {
     let n = vertices.len();
     let mut first_orientation = orientation(vertices[0], vertices[1 % n], vertices[2 % n]);
 
@@ -347,7 +347,7 @@ fn orientation(a: Vec2, b: Vec2, p: Vec2) -> Orientation {
     Orientation::Touch
 }
 
-pub(crate) fn point_inside_poly(p: Vec2, poly: &Vec<Vec2>, aabb: Aabb2d, concave: bool) -> bool {
+pub(crate) fn point_inside_poly(p: Vec2, poly: &[Vec2], aabb: Aabb2d, concave: bool) -> bool {
     if !aabb.contains(&Aabb2d { min: p, max: p }) {
         return false;
     }

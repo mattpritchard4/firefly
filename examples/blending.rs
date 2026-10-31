@@ -1,8 +1,4 @@
-use bevy::{
-    camera::Hdr,
-    color::palettes::css::{BLUE, RED, WHITE},
-    prelude::*,
-};
+use bevy::{camera::Hdr, color::palettes::css::WHITE, prelude::*};
 use bevy_firefly::prelude::*;
 
 fn main() {
@@ -22,7 +18,7 @@ fn setup(mut commands: Commands) {
 
     commands.spawn((
         Camera2d,
-        Hdr::default(),
+        Hdr,
         Projection::Orthographic(proj),
         FireflyConfig::default(),
     ));

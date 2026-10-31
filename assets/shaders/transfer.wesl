@@ -1,6 +1,6 @@
-// Shader that simply transfers an input texture into the output. 
+// Shader that simply transfers an input texture into the output.
 
-#import bevy_core_pipeline::fullscreen_vertex_shader::FullscreenVertexOutput
+import bevy_core_pipeline::fullscreen_vertex_shader::FullscreenVertexOutput;
 
 @group(0) @binding(0)
 var input_texture: texture_2d<f32>;

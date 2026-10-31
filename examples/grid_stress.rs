@@ -46,7 +46,7 @@ fn setup(mut commands: Commands) {
 
     commands.spawn((
         Camera2d,
-        Hdr::default(),
+        Hdr,
         Projection::Orthographic(proj),
         FireflyConfig {
             ambient_brightness: 0.2,
