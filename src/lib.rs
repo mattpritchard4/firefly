@@ -5,7 +5,7 @@
 //! # Example
 //! Here is a basic example of implementing Firefly into a Bevy game.
 //!
-//! ```
+//! ```no_run
 //! use bevy::prelude::*;
 //! use bevy_firefly::prelude::*;
 //!

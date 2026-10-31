@@ -171,21 +171,29 @@ pub(crate) struct ImageBindGroups {
 ///
 /// Automatic image loading:
 /// ```
+/// # use bevy::prelude::*;
+/// # use bevy_firefly::prelude::*;
+/// # fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
 /// commands.spawn((
 ///     Sprite::from_image(asset_server.load("some_sprite.png")),
-///     NormalMap::from_file("some_sprite_normal.png"),
+///     NormalMap::from_file("some_sprite_normal.png", &asset_server),
 /// ));
+/// # }
 /// ```
 ///
 /// Manual image loading:
 ///
 /// ```
-/// let image: Handle<Image> = asset_server.load_with_settings("some_sprite_normal.png", |x: &mut ImageLoaderSettings| x.is_srgb = false);
+/// # use bevy::{prelude::*, image::ImageLoaderSettings};
+/// # use bevy_firefly::prelude::*;
+/// # fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
+/// let image: Handle<Image> = asset_server.load_builder().with_settings(|x: &mut ImageLoaderSettings| x.is_srgb = false).load("some_sprite_normal.png");
 ///
 /// commands.spawn((
 ///     Sprite::from_image(asset_server.load("some_sprite.png")),
 ///     NormalMap::from_image(image),
 /// ));
+/// # }
 /// ```
 ///  
 /// See [Sprite] for more information on using sprites.
@@ -227,7 +235,10 @@ impl NormalMap {
     /// Construct a new [NormalMap] from an image handle. It's important that this image is loaded without gamma correction:
     ///
     /// ```
-    /// let image: Handle<Image> = asset_server.load_builder().with_settings(|x: &mut ImageLoaderSettings| x.is_srgb = false).load(path);
+    /// # use bevy::{prelude::*, image::ImageLoaderSettings};
+    /// # fn load_normal(asset_server: &AssetServer) {
+    /// let image: Handle<Image> = asset_server.load_builder().with_settings(|x: &mut ImageLoaderSettings| x.is_srgb = false).load("some_sprite_normal.png");
+    /// # }
     /// ```
     ///
     /// You can use the [`from_file`](NormalMap::from_file) constructor to handle this automatically for you, and later grab the handle

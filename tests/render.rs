@@ -388,6 +388,126 @@ fn firefly_shader_variants_and_view_lifecycle() {
             > 100,
         "second camera must contribute real blue illumination"
     );
+    // The source remains live while its destination is disabled and restored.
+    app.world_mut().entity_mut(camera).remove::<FireflyConfig>();
+    app.update();
+    let disabled_destination = capture(&mut app, &target, "disabled_destination");
+    assert!(
+        disabled_destination
+            .data
+            .as_ref()
+            .unwrap()
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .all(|p| p[0] > 240 && p[1] > 240 && p[2] > 240)
+    );
+    app.world_mut().entity_mut(camera).insert(FireflyConfig {
+        combination_mode: CombinationMode::Add,
+        ..default()
+    });
+    pump(&mut app, compiled);
+    let restored_destination = capture(&mut app, &target, "restored_destination");
+    assert!(
+        restored_destination
+            .data
+            .as_ref()
+            .unwrap()
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|p| p[2] > p[0].saturating_add(10))
+    );
+    app.world_mut()
+        .get_mut::<FireflyConfig>(camera)
+        .unwrap()
+        .lightmap_size = LightmapSize::Fixed(UVec2::ZERO);
+    app.update();
+    capture(&mut app, &target, "invalid_destination");
+    app.world_mut()
+        .get_mut::<FireflyConfig>(camera)
+        .unwrap()
+        .lightmap_size = LightmapSize::Window;
+    pump(&mut app, compiled);
+    let recovered_destination = capture(&mut app, &target, "recovered_destination");
+    assert!(
+        recovered_destination
+            .data
+            .as_ref()
+            .unwrap()
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|p| p[2] > p[0].saturating_add(10))
+    );
+    let later_source = app
+        .world_mut()
+        .spawn((
+            Camera2d,
+            Camera {
+                order: -2,
+                output_mode: bevy::camera::CameraOutputMode::Skip,
+                ..default()
+            },
+            RenderTarget::Image(target.clone().into()),
+            FireflyConfig::default(),
+            Msaa::Off,
+            bevy::render::view::Tonemapping::None,
+            bevy::camera::visibility::RenderLayers::layer(2),
+            CombineLightmapTo(camera),
+        ))
+        .id();
+    let green = app
+        .world_mut()
+        .spawn((
+            PointLight2d {
+                color: Color::srgb(0.0, 1.0, 0.0),
+                intensity: 3.0,
+                radius: 180.0,
+                ..default()
+            },
+            Transform::default(),
+            bevy::camera::visibility::RenderLayers::layer(2),
+        ))
+        .id();
+    pump(&mut app, compiled);
+    app.world_mut().get_mut::<Camera>(source).unwrap().is_active = false;
+    app.update();
+    let inactive = capture(&mut app, &target, "inactive_source");
+    assert!(
+        inactive
+            .data
+            .as_ref()
+            .unwrap()
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|p| p[1] > p[0].saturating_add(10)),
+        "later active source must keep a valid array layer"
+    );
+    app.world_mut()
+        .entity_mut(later_source)
+        .remove::<CombineLightmapTo>();
+    for _ in 0..3 {
+        app.update();
+    }
+    let unlinked = capture(&mut app, &target, "unlinked_source");
+    assert!(
+        unlinked
+            .data
+            .as_ref()
+            .unwrap()
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .all(|p| p[0] < 3 && p[1] < 3 && p[2] < 3),
+        "unlinked source must not retain its destination binding"
+    );
+    app.world_mut().despawn(later_source);
+    app.world_mut().despawn(green);
+    app.world_mut().get_mut::<Camera>(source).unwrap().is_active = true;
+    pump(&mut app, compiled);
+    capture(&mut app, &target, "reactivated_source");
     app.world_mut().despawn(source);
     app.world_mut().despawn(blue);
     for _ in 0..5 {

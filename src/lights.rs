@@ -393,7 +393,9 @@ fn queue_lights(
         };
 
         let (target_format, msaa) = if let Some(combined_lightmap) = combined_lightmap {
-            let view = views.get(combined_lightmap.0).unwrap();
+            let Ok(view) = views.get(combined_lightmap.0) else {
+                continue;
+            };
             (view.0.target_format, view.4)
         } else {
             (view.target_format, msaa)

@@ -1,3 +1,5 @@
+mod support;
+
 use bevy::{color::palettes::css::RED, prelude::*};
 use bevy_firefly::prelude::*;
 
@@ -11,6 +13,7 @@ fn main() {
     app.add_systems(Startup, setup);
     app.add_systems(Update, move_light);
 
+    support::install(&mut app);
     app.run();
 }
 

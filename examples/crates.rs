@@ -1,3 +1,5 @@
+mod support;
+
 use bevy::{
     camera::Hdr, color::palettes::css::RED, prelude::*, sprite::Anchor, window::PrimaryWindow,
 };
@@ -14,6 +16,7 @@ fn main() {
     app.add_systems(Startup, setup);
     app.add_systems(Update, (z_sorting, drag_objects));
 
+    support::install(&mut app);
     app.run();
 }
 

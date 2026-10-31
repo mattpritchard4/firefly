@@ -1,3 +1,5 @@
+mod support;
+
 use bevy::{
     color::palettes::{
         self,
@@ -77,6 +79,7 @@ fn main() {
     app.init_resource::<LogDiagnosticsStatus>();
     app.init_resource::<LogDiagnosticsFilters>();
 
+    support::install(&mut app);
     app.run();
 }
 

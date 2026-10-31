@@ -3,6 +3,8 @@
 //! This is greatly inspired by Bevy's post processing example: https://bevy.org/examples/shaders/custom-post-processing/.
 //! Check out that example for more in-depth comments and explanations.
 
+mod support;
+
 use bevy::{
     camera::Hdr,
     color::palettes::css::{RED, WHITE},
@@ -42,11 +44,12 @@ const NOISE_SHADER_ASSET_PATH: &str = "shaders/noise.wesl";
 const TRANSFER_SHADER_ASSET_PATH: &str = "shaders/transfer.wesl";
 
 fn main() {
-    App::new()
-        .add_plugins((DefaultPlugins, FireflyPlugin, LightmapEditPlugin))
+    let mut app = App::new();
+    app.add_plugins((DefaultPlugins, FireflyPlugin, LightmapEditPlugin))
         .add_systems(Startup, setup)
-        .add_systems(Update, (update_time, move_light))
-        .run();
+        .add_systems(Update, (update_time, move_light));
+    support::install(&mut app);
+    app.run();
 }
 
 fn setup(mut commands: Commands) {

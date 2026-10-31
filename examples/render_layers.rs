@@ -1,3 +1,5 @@
+mod support;
+
 use bevy::{
     camera::{Hdr, RenderTarget, visibility::RenderLayers},
     color::palettes::css::{BLUE, RED},
@@ -14,6 +16,7 @@ fn main() {
 
     app.add_systems(Startup, setup);
 
+    support::install(&mut app);
     app.run();
 }
 

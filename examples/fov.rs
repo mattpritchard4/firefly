@@ -1,5 +1,7 @@
 //! This example demonstrates using multiple lightmaps and render layers.
 
+mod support;
+
 use bevy::{
     camera::{CameraOutputMode, Hdr, visibility::RenderLayers},
     color::palettes::css::{BLUE, RED},
@@ -23,6 +25,7 @@ fn main() {
     })
     .init_resource::<Dragged>();
 
+    support::install(&mut app);
     app.run();
 }
 

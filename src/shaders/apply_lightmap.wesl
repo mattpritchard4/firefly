@@ -48,5 +48,8 @@ fn fragment(vo: FullscreenVertexOutput) -> @location(0) vec4<f32> {
 
     let scene_frag = textureSample(screen_texture, texture_sampler, vo.uv);
 
-    return scene_frag * light_frag;
+    // Illumination changes color, not scene coverage. Bevy 0.20 counts all cameras
+    // sharing a target when choosing automatic output blending, including skipped
+    // lightmap-source cameras; a zero lightmap alpha would erase the lit result.
+    return vec4f(scene_frag.rgb * light_frag.rgb, scene_frag.a);
 }

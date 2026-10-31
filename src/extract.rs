@@ -216,7 +216,10 @@ fn extract_world_data(
         )>,
     >,
     render_camera: Query<Has<ExtractedCombinedLightmaps>>,
+    previous_sources: Query<Entity, With<ExtractedCombineLightmapTo>>,
+    mut live_sources: Local<HashSet<Entity>>,
 ) {
+    live_sources.clear();
     for (entity, transform, _, combined_lightmaps) in &camera {
         commands.entity(entity.id()).insert(ExtractedWorldData {
             camera_pos: transform.translation().truncate(),
@@ -224,15 +227,20 @@ fn extract_world_data(
 
         if let Some(combined_lightmaps) = combined_lightmaps {
             let mut extracted_collection = vec![];
-            for (i, main_entity) in combined_lightmaps.collection().iter().enumerate() {
-                let (render_entity, camera) = cameras.get(*main_entity).unwrap();
+            for main_entity in combined_lightmaps.collection() {
+                let Ok((render_entity, camera)) = cameras.get(*main_entity) else {
+                    continue;
+                };
                 if !camera.is_active {
                     continue;
                 }
-
+                let Ok(layer) = u32::try_from(extracted_collection.len()) else {
+                    continue;
+                };
                 commands
                     .entity(render_entity.entity())
-                    .insert(ExtractedCombineLightmapTo(entity.id(), i as u32));
+                    .insert(ExtractedCombineLightmapTo(entity.id(), layer));
+                live_sources.insert(render_entity.id());
                 extracted_collection.push(**render_entity);
             }
 
@@ -243,6 +251,13 @@ fn extract_world_data(
             commands
                 .entity(entity.id())
                 .remove::<ExtractedCombinedLightmaps>();
+        }
+    }
+    for source in &previous_sources {
+        if !live_sources.contains(&source) {
+            commands
+                .entity(source)
+                .remove::<ExtractedCombineLightmapTo>();
         }
     }
 }

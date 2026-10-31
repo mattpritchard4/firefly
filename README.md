@@ -31,6 +31,13 @@ renderer or lighting algorithm is introduced.
 For native macOS example inspection, build the selected example, then run
 `python3 scripts/bundle-macos.py simple` and open the printed `.app`. The helper
 copies the built executable and assets; it does not compile or alter OS settings.
+Set `FIREFLY_CAPTURE_FILE=/absolute/output.png` and optionally
+`FIREFLY_CAPTURE_SECONDS=5` when launching a supported example to capture its
+actual native target and exit. Multi-window examples save one image per window.
+Use 30 seconds for the existing evolving `stress` scene; logs report object counts,
+logical/physical size and scale. This is opt-in evidence support, not a steady
+readback path or a performance benchmark. Inspect the resulting pixels.
+
 The original .19 all-example build has a known obsolete `noise` example; this
 port updates that example to scheduled render systems and WESL alongside the
 library. Bevy 0.20 removed CPU slicing helpers, so the stencil/normal pass retains

@@ -1,3 +1,5 @@
+mod support;
+
 use bevy::{camera::Hdr, color::palettes::css::WHITE, prelude::*};
 use bevy_firefly::prelude::*;
 
@@ -9,6 +11,7 @@ fn main() {
 
     app.add_systems(Startup, setup);
 
+    support::install(&mut app);
     app.run();
 }
 

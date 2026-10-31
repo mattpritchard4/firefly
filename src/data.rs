@@ -203,7 +203,11 @@ pub struct UniformFireflyConfig {
 ///
 /// ## Example
 /// ```
+/// # use bevy::{prelude::*, camera::CameraOutputMode};
+/// # use bevy_firefly::prelude::*;
+/// # fn setup(mut commands: Commands) {
 /// let main_camera = commands.spawn((
+///     Camera2d,
 ///     FireflyConfig {
 ///         combination_mode: CombinationMode::Add,
 ///         ..default()
@@ -215,25 +219,28 @@ pub struct UniformFireflyConfig {
 /// )).id();
 ///
 /// commands.spawn((
+///     Camera2d,
 ///     FireflyConfig::default(),
 ///     Camera {
 ///         order: -1,
 ///         output_mode: CameraOutputMode::Skip,
 ///         ..default()
-///     }
+///     },
 ///     CombineLightmapTo(main_camera)
 /// ));
 ///
 /// commands.spawn((
+///     Camera2d,
 ///     FireflyConfig::default(),
 ///     Camera {
 ///         order: -1,
 ///         output_mode: CameraOutputMode::Skip,
 ///         ..default()
-///     }
+///     },
 ///     CombineLightmapTo(main_camera)
 /// ));
 ///
+/// # }
 /// ```
 ///
 /// ## Limitations

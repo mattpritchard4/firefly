@@ -1,3 +1,5 @@
+mod support;
+
 use bevy::{
     camera::Hdr, color::palettes::css::RED, input::mouse::MouseWheel, prelude::*,
     window::PrimaryWindow,
@@ -29,6 +31,7 @@ fn main() {
     app.add_systems(Startup, setup);
     app.add_systems(Update, (move_light, move_camera));
 
+    support::install(&mut app);
     app.run();
 }
 
