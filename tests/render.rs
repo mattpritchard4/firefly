@@ -228,6 +228,70 @@ fn firefly_shader_variants_and_view_lifecycle() {
 
     assert!(app.sub_app(RenderApp).world().resource::<bevy::render::render_phase::ViewSortedRenderPhases<bevy_firefly::phases::SpritePhase>>().iter().any(|(_, phase)| !phase.items.is_empty()), "the real sprite must enter Firefly stencil/normal rendering");
     let lit = capture(&mut app, &target, "lit");
+    // Separate simultaneous targets must keep layer-specific lights. Exercise
+    // actual HDR/MSAA output, not just pipeline keys.
+    let blue_image = app
+        .world()
+        .resource::<Assets<Image>>()
+        .get(&target)
+        .unwrap()
+        .clone();
+    let blue_target = app
+        .world_mut()
+        .resource_mut::<Assets<Image>>()
+        .add(blue_image);
+    let blue_camera = app
+        .world_mut()
+        .spawn((
+            Camera2d,
+            RenderTarget::Image(blue_target.clone().into()),
+            FireflyConfig::default(),
+            bevy::camera::visibility::RenderLayers::layer(1),
+            Msaa::Sample4,
+            bevy::camera::Hdr,
+            bevy::render::view::Tonemapping::AgX,
+        ))
+        .id();
+    let layer_light = app
+        .world_mut()
+        .spawn((
+            PointLight2d {
+                color: Color::srgb(0.0, 0.0, 1.0),
+                intensity: 3.0,
+                radius: 180.0,
+                ..default()
+            },
+            Transform::default(),
+            bevy::camera::visibility::RenderLayers::layer(1),
+        ))
+        .id();
+    pump(&mut app, compiled);
+    let isolated_red = capture(&mut app, &target, "layer_red");
+    let isolated_blue = capture(&mut app, &blue_target, "layer_blue_hdr_msaa4");
+    assert!(
+        isolated_red
+            .data
+            .as_ref()
+            .unwrap()
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|p| p[0] > p[2].saturating_add(20)),
+        "layer 0 must render red on its own target"
+    );
+    assert!(
+        isolated_blue
+            .data
+            .as_ref()
+            .unwrap()
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|p| p[2] > p[0].saturating_add(20)),
+        "layer 1 must render blue on its own HDR/MSAA4 target"
+    );
+    app.world_mut().despawn(blue_camera);
+    app.world_mut().despawn(layer_light);
     if std::env::var_os("FIREFLY_DIAGNOSTICS").is_some() {
         println!(
             "main light visibility {:?}; camera {:?}",

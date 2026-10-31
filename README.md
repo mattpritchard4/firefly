@@ -37,6 +37,9 @@ actual native target and exit. Multi-window examples save one image per window.
 Use 30 seconds for the existing evolving `stress` scene; logs report object counts,
 logical/physical size and scale. This is opt-in evidence support, not a steady
 readback path or a performance benchmark. Inspect the resulting pixels.
+On macOS, automatic window tabbing can leave hidden render-layer windows with
+black captures. Expose each tab and inspect its native output before judging
+layer separation; an occluded target is not rendered-output proof.
 
 The original .19 all-example build has a known obsolete `noise` example; this
 port updates that example to scheduled render systems and WESL alongside the
